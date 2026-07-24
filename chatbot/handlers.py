@@ -647,8 +647,14 @@ class MessageHandler:
                     time.sleep(3)
                     subject_name = credit_check.subject.full_name
                     subject_national_id = credit_check.subject.national_id
-                    response = f"Would you like to give credit to {subject_name} - {subject_national_id}?\n\nReply with 'yes' or 'no':"
-                    self.whatsapp.send_message(person.phone_number, response)
+                    response = f"Would you like to give credit to {subject_name} - {subject_national_id}?\n\n"
+                    buttons = [
+                                {'id': 'lend_money', 'title': 'Yes'},
+                                {'id': 'no', 'title': 'No'},
+                                # {'id': 'settle_debt', 'title': '✅ Settle Debt'}
+                            ]
+                    self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
+                    # self.whatsapp.send_message(person.phone_number, response)
                     person.set_session_data('pending_credit_check', credit_check.id)
                     person.user_status = 'offer_lending'
                     person.save()
@@ -670,13 +676,20 @@ class MessageHandler:
                 
                 subject_name = credit_check.subject.full_name
                 subject_national_id = credit_check.subject.national_id
-                response = f"Which currency is credit to {subject_name} - {subject_national_id} ?\n\n1. USD\n2. Rand\n 3. ZWL"
+                response = f"Which currency is credit to {subject_name} - {subject_national_id} ?\n\n1. USD\n2. Rand\n3. ZWL"
+                buttons = [
+                            {'id': 'lend_money', 'title': 'USD'},
+                            {'id': 'track_lended', 'title': 'Rand'},
+                            {'id': 'settle_debt', 'title': 'ZWL'}
+                        ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
                 person.user_mode = 'lend_money'
                 person.user_status = 'enter_credit_currency'
                 person.set_session_data('lending_borrower_id', credit_check.subject.id)
                 person.save()
                 
-                self.whatsapp.send_message(person.phone_number, response)
+                # self.whatsapp.send_message(person.phone_number, response)
+                return True
             else:
                 return self.show_main_menu(person)
         
@@ -966,17 +979,18 @@ class MessageHandler:
                 response += f"{borrower.full_name} needs to verify their account first."
                 self.whatsapp.send_message(person.phone_number, response)
                 
-            if message_text == '1':
+            if message_text in ['1','usd']:
                 currency = 'usd'
-            elif message_text == '2':
+            elif message_text in ['2','rand']:
                 currency = 'rand'
-            elif message_text == '3':
+            elif message_text in ['3','zwl']:
                 currency = 'zwl'
             # Create lending contract
             contract = LendingContract.objects.create(
                     lender=person,
                     borrower=borrower,
                     currency=currency,
+                    amount=0,
                     due_date=timezone.now() + timedelta(days=30)
                 )
             person.set_session_data('current_lending_contract_id', contract.id)
