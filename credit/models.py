@@ -101,7 +101,7 @@ class LendingContract(models.Model):
         ('zwl', 'ZWL'),
     ],default='usd')
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    due_date = models.DateTimeField()
+    due_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     otp_code = models.CharField(max_length=6, null=True, blank=True)
     # Tracking
