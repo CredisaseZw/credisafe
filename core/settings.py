@@ -40,8 +40,12 @@ ALLOWED_HOSTS = [
     "unpoised-unformidably-shanon.ngrok-free.dev",
     "localhost",
     "127.0.0.1",
+    "chatbot.credi-safe.com",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://chatbot.credi-safe.com",
+]
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
