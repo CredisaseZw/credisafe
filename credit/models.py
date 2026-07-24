@@ -9,6 +9,8 @@ class CreditHistory(models.Model):
     total_borrowed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_repaid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     outstanding_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_claims = models.IntegerField(default=0)
+    total_courts = models.IntegerField(default=0)
     default_risk = models.CharField(max_length=50, choices=[
         ('low', 'Low Risk'),
         ('medium', 'Medium Risk'),
@@ -78,15 +80,30 @@ class LendingContract(models.Model):
         ('settled', 'Settled'),
         ('defaulted', 'Defaulted'),
         ('disputed', 'Disputed'),
+        ('cancelled', 'Cancelled'),
+        ('rejected', 'Rejected'),
+    ]
+    CREDIT_TYPES =[
+        ("cash", "Cash"),
+        ("goods", "Goods"),
+        ("service", "Service"),
+        ("loan", "Loan"),
+        ("mukando", "Mukando")
     ]
     
+    credit_type = models.CharField(max_length=20, choices=CREDIT_TYPES, null=True, blank=True)
     lender = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='loans_given')
     borrower = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='loans_taken')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=5,choices=[
+        ('rand', 'ZAR'),
+        ('usd', 'USD'),
+        ('zwl', 'ZWL'),
+    ],default='usd')
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     due_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
-    
+    otp_code = models.CharField(max_length=6, null=True, blank=True)
     # Tracking
     settled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

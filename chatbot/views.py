@@ -250,13 +250,13 @@ def verify_person(request, person_id):
                 "2. Edit details\n3. Reject"
             )
             
-            person.user_status = 'borrower_confirmation'
-            person.save(update_fields=['user_status'])
+            person.user_mode = 'borrower_confirmation'
+            person.save(update_fields=['user_mode'])
             whatsapp.send_message(person.phone_number, subject_details)
         else:
-            person.user_status = 'verified'
+            person.verification_status = 'verified'
             person.is_verified = True
-            person.save(update_fields=['user_status', 'is_verified'])
+            person.save(update_fields=['verification_status', 'is_verified'])
             whatsapp.send_message(person.phone_number, "Congratulations! Your account has been verified on CrediSafe, send hi to get started.")
         return Response({'status': 'ok', 'message': 'Person verified'}, status=200)
     except Person.DoesNotExist:

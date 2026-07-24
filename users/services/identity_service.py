@@ -68,24 +68,26 @@ def similarity(a, b):
 
 def compute_credit_score(data: dict) -> int:
     """
-    Simple example scoring logic (customize this properly)
+    Higher score = higher risk.
     """
-    score = 600  # base
+    score = 0  # Default: Low Risk
 
     claims = data.get("claims", [])
     court_cases = data.get("court_records", [])
 
-    score -= len(claims) * 5
-    score -= len(court_cases) * 20
+    # Increase score based on claims and court records
+    score += len(claims) * 5
+    score += len(court_cases) * 20
 
     total_debt = sum(float(c.get("amount", 0) or 0) for c in claims)
 
     if total_debt > 10000:
-        score -= 100
+        score += 100
     elif total_debt > 5000:
-        score -= 50
+        score += 50
 
-    return max(300, min(850, score))
+    # Cap the maximum score
+    return min(850, score)
 
 
 def get_highest_creditor(claims: list) -> str | None:

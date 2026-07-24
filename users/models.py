@@ -68,6 +68,7 @@ class Person(models.Model):
         ('borrower_confirmation', 'Borrower Confirmation'),
         ('suspension', 'Suspended'),
         ('addition_aborted', 'Addition Aborted'),
+        ('accept_credit', 'Accept Credit'),
         
     ]
     
@@ -97,6 +98,13 @@ class Person(models.Model):
         ('hold', 'Hold Access'),
         ('verify_details', 'Verifying Details'),
         ('verify_borrower_details', 'Verifying Borrower'),
+        ('enter_credit_currency', 'Enter Currency'),
+        ('enter_credit_amount', 'Enter Credit Amount'),
+        ('enter_credit_type', 'Enter Credit Type'),
+        ('enter_end_date', 'Enter End Date'),
+        ('confirm_credit_details', 'Confirm Credit'),
+        ('accept_credit', 'Accept Credit'),
+        
     ]
     
     VERIFICATION_STATUSES = [

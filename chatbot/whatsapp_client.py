@@ -148,6 +148,7 @@ class WhatsAppClient:
     
     def send_message(self, to_number: str, message: str, enable_disappearing: bool = True):
         """Send a message via WhatsApp with optional disappearing messages"""
+        import time
         try:
             to_number = self._clean_phone_number(to_number)
             
@@ -162,7 +163,7 @@ class WhatsAppClient:
                 "to": to_number,
                 "body": message,
             }
-            
+            time.sleep(0.5)
             response = requests.post(
                 f"{self.base_url}/messages/text",
                 headers=self.headers,

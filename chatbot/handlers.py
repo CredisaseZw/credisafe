@@ -9,6 +9,10 @@ from chatbot.whatsapp_client import WhatsAppClient
 import logging
 from chatbot.models import WhatsAppMessage
 from chatbot.validators import validate_name, validate_address
+import time
+from decimal import Decimal
+from django.db.models import Sum
+
 logger = logging.getLogger(__name__)
 
 class MessageHandler:
@@ -96,7 +100,7 @@ class MessageHandler:
         
         elif person.user_mode in ["edit_profile", "signup"]:
             return self.handle_signup(person, message_text)
-        elif person.user_mode == 'credit_check':
+        elif person.user_mode == 'credit_check' or message_text.lower() =="give credit":
             
             return self.handle_credit_check(person, message_text)
         elif person.user_mode == 'offer_service':
@@ -105,6 +109,10 @@ class MessageHandler:
         elif person.user_mode == 'lend_money':
             # return self.whatsapp.send_message(person.phone_number, "Lending Option in dev..")
             return self.handle_lend_money(person, message_text)
+        elif person.user_mode =="accept_credit":
+            return self.handle_accept_credit(person, message_text)
+        
+        
         elif person.user_mode == 'track_lended':
             # return self.whatsapp.send_message(person.phone_number, "Tracking Logic in dev..")
             
@@ -120,9 +128,11 @@ class MessageHandler:
     def handle_borrower_confirmation(self, person, message_text):
         try:
             is_int = int(message_text)
+            is_int=True
         except:
             is_int = False
-        if message_text.lower() in ["yes", "y"] or is_int and len(message_text) == 4:
+        uploader = getattr(person, 'uploader', None)
+        if message_text.lower() in ["yes", "y","1"] or is_int:
             person.user_status = "otp_setup"
             person.user_mode ="welcome"
             person.is_verified = True
@@ -130,10 +140,12 @@ class MessageHandler:
             person.save(update_fields=["user_status","user_mode","is_verified","verification_status"])
             message_to_subject = "Your details have been added successfully. Enter a 4-digit code for future access"
             self.whatsapp.send_message(person.phone_number, message_to_subject)
-            message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on CrediSafe\n\n"
-            title_one ="Give Credit"
             # title_two = "Get Credit"
-            return self.show_main_menu(person,welcome_message=message_to_creditor,title_one=title_one)
+            if uploader:
+                title_one ="Give Credit"
+                message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on CrediSafe\n\n"
+                return self.show_main_menu(uploader,welcome_message=message_to_creditor,title_one=title_one)
+            return True
         elif message_text.lower() in ["2", "2.", "edit"]:
             person.user_mode = "edit_profile"
             person.save(update_fields=["user_mode"])
@@ -146,12 +158,44 @@ class MessageHandler:
             person.save(update_fields=["verification_status","user_mode"])
             message_to_subject = "You rejected adding your details to CrediSafe. Please contact us at 0715239711 if you decided otherwise or if you have any questions."
             self.whatsapp.send_message(person.phone_number, message_to_subject)
-            message_to_creditor = f"{person.full_name} - {person.national_id} rejected adding their details to CrediSafe.\n\n"
-            self.whatsapp.send_message(person.phone_number, message_to_creditor)
+            if uploader:
+                message_to_creditor = f"{person.full_name} - {person.national_id} rejected adding their details to CrediSafe.\n\n"
+                self.whatsapp.send_message(uploader.phone_number, message_to_creditor)
             return True
         else:
             return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type 'yes' or 'no'.")
     
+    def handle_accept_credit(self, person, message_text):
+        pending_contract_to_confirm_id = person.get_session_key("pending_contract_to_confirm_id")
+        contract = LendingContract.objects.filter(id=pending_contract_to_confirm_id).first()
+        if not contract:
+            return self.whatsapp.send_message(person.phone_number, "An error occurred, error code: 101")
+        
+        if message_text.lower() in ["no", "n","reject"]:
+            contract.status = "rejected"
+            contract.save(update_fields=["status"])
+            message_to_subject = "Credit has been rejected."
+            self.whatsapp.send_message(person.phone_number, message_to_subject)
+            message_to_creditor = f"{person.full_name} - {person.national_id} rejected your credit of {contract.currency}{contract.amount}.\n\n"
+            self.whatsapp.send_message(contract.lender.phone_number, message_to_creditor)
+            return True
+        try:
+            otp = int(message_text)
+        except:
+            return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the code to accept or 'reject' to reject.")
+        if contract.otp_code == otp:
+            contract.status = "active"
+            contract.save(update_fields=["status"])
+            message_to_subject = "Credit has been accepted."
+            self.whatsapp.send_message(person.phone_number, message_to_subject)
+            readable_date = contract.due_date.strftime("%d %B %Y")
+            person.user_mode = "welcome"
+            person.save(update_fields=["user_mode"])
+            message_to_creditor = f"{person.full_name}({person.phone_number}) has confirmed taking credit from you of {contract.currency}{contract.amount} for {contract.credit_type} to be repaid on {readable_date}."
+            self.whatsapp.send_message(contract.lender.phone_number, message_to_creditor)
+            return True
+        else:
+            return self.whatsapp.send_message(person.phone_number, "Wrong code. Please try again.")
     
     def handle_login(self, person, message_text):
         if person.otp_code == message_text:
@@ -259,7 +303,7 @@ class MessageHandler:
             data = fetch_individual(nid)
             credit_score, top_creditor = None, None
             if data:
-
+                self.handle_subject_credit_records(person, data)
                 credit_score = compute_credit_score(data)
                 top_creditor = get_highest_creditor(data.get("claims", []))
 
@@ -542,17 +586,9 @@ class MessageHandler:
                         person.user_mode="borrower_signup"
                         person.user_status="borrower_address"
                         return self.handle_new_borrower(person, nid)
-                        
-                    # Person exists in DB but not in API - use existing data
-                    print("Person exists in DB but not API, likely unverified. Proceeding with existing data.")
-                    # Go directly to phone verification for existing borrower
-                    person.set_session_data('borrower_id', borrower_ob.id)
-                    person.user_status = 'request_borrower_info'
-                    person.save()
                     
-                    response = f"ID Number found;\n {borrower_ob.national_id} - {borrower_ob.full_name}\n\nRequest status check access:\n\n1. Yes\n2. No"
-                    self.whatsapp.send_message(person.phone_number, response)
-                    return True
+                    return self.initiate_credit_check(person, borrower_ob)
+                        
                 if not borrower_ob:
                     # Person not found in API or DB - create new record
                     return self.handle_new_borrower(person, nid)
@@ -577,104 +613,6 @@ class MessageHandler:
         elif person.user_status == 'fetching_borrower_data':
             # This state is handled above, but keep for safety
             return self.handle_credit_check(person, message_text)
-        
-        elif person.user_status == 'new_borrower_creation':
-            # Handle creation of new borrower record
-            nid = person.get_session_key('borrower_national_id')
-            return self.create_new_borrower_record(person, nid, message_text)
-        
-        elif person.user_status == 'borrower_phone':
-            borrower_phone = message_text
-            borrower_national_id = person.get_session_key('borrower_national_id')
-            
-            try:
-                borrower = Person.objects.get(national_id=borrower_national_id)
-            except Person.DoesNotExist:
-                response = "Borrower not found in our system. They need to sign up first."
-                self.whatsapp.send_message(person.phone_number, response)
-                return self.show_main_menu(person)
-            
-            # Update borrower's phone number if provided
-            if borrower_phone and not borrower.phone_number:
-                borrower.phone_number = borrower_phone
-                borrower.save()
-            
-            # Check if borrower is verified
-            if borrower.verification_status != 'verified':
-                response = "⚠️ *Borrower Not Verified* ⚠️\n\n"
-                response += f"{borrower.full_name or 'This person'} is not yet verified.\n"
-                response += "Kindly send through their National ID/Passport photo if you haven't already.\n\n"
-                response += "You'll be notified once they are verified."
-                
-                person.set_session_data('pending_borrower_id', borrower.id)
-                person.user_status = 'borrower_id'
-                person.save()
-                
-                self.whatsapp.send_message(person.phone_number, response)
-                return True
-            
-            # Check if person is checking themselves
-            if borrower.phone_number == person.phone_number:
-                # Self check - no SMS required
-                credit_check = CreditCheck.objects.create(
-                    checker=person,
-                    subject=borrower,
-                    check_type='self_check',
-                    status='completed'
-                )
-                
-                credit_history = self.get_credit_history(borrower)
-                credit_check.credit_history_snapshot = credit_history
-                credit_check.checked_at = timezone.now()
-                credit_check.save()
-                
-                response = self.format_credit_report(borrower, credit_history)
-                self.whatsapp.send_message(person.phone_number, response)
-                return self.show_main_menu(person)
-            else:
-                # Third party check - need OTP
-                otp_code = self.generate_otp()
-                credit_check = CreditCheck.objects.create(
-                    checker=person,
-                    subject=borrower,
-                    check_type='third_party',
-                    status='pending_otp',
-                    otp_code=otp_code,
-                    expires_at=timezone.now() + timedelta(minutes=10)
-                )
-                
-                # Send SMS to checker
-                sms_message = f"Your OTP for credit check is: {otp_code}. Valid for 10 minutes."
-                self.send_sms(person.phone_number, sms_message)
-                
-                person.user_status = 'otp_confirmation'
-                person.set_session_data('current_credit_check_id', credit_check.id)
-                person.save()
-                
-                response = "🔐 An OTP has been sent to your phone number.\n\nPlease enter the OTP to view the credit history:"
-                self.whatsapp.send_message(person.phone_number, response)
-                return True
-        
-        elif person.user_status == 'notify_unverified_borrower':
-            if message_text.lower() in ['yes', 'y']:
-                borrower_id = person.get_session_key('pending_borrower_id')
-                borrower = Person.objects.get(id=borrower_id)
-                
-                # Notify borrower to verify
-                notify_msg = "📢 *Verification Required* 📢\n\n"
-                notify_msg += f"{person.full_name or 'Someone'} wants to check your credit.\n"
-                notify_msg += "Please complete your verification to proceed.\n\n"
-                notify_msg += "Reply with your National ID to start verification."
-                
-                self.whatsapp.send_message(borrower.phone_number, notify_msg)
-                
-                response = "✅ Notification sent! They will need to verify first."
-                self.whatsapp.send_message(person.phone_number, response)
-            else:
-                response = "Credit check cancelled."
-                self.whatsapp.send_message(person.phone_number, response)
-            
-            return self.show_main_menu(person)
         
         elif person.user_status == 'otp_confirmation':
             # Verify OTP
@@ -704,11 +642,12 @@ class MessageHandler:
                         details={'method': 'otp_verified'},
                         performed_by_phone=person.phone_number
                     )
-                    
                     response = self.format_credit_report(credit_check.subject, credit_history)
                     self.whatsapp.send_message(person.phone_number, response)
-                    
-                    response = "💰 Would you like to lend money to this person?\n\nReply with 'yes' or 'no':"
+                    time.sleep(3)
+                    subject_name = credit_check.subject.full_name
+                    subject_national_id = credit_check.subject.national_id
+                    response = f"Would you like to give credit to {subject_name} - {subject_national_id}?\n\nReply with 'yes' or 'no':"
                     self.whatsapp.send_message(person.phone_number, response)
                     person.set_session_data('pending_credit_check', credit_check.id)
                     person.user_status = 'offer_lending'
@@ -725,13 +664,15 @@ class MessageHandler:
                 return self.show_main_menu(person)
         
         elif person.user_status == 'offer_lending':
-            if message_text.lower() in ['yes', 'y']:
+            if message_text.lower() in ['yes', 'y','sure']:
                 credit_check_id = person.get_session_key('pending_credit_check')
                 credit_check = CreditCheck.objects.get(id=credit_check_id)
                 
-                response = f"💰 How much would you like to lend to {credit_check.subject.full_name}?\n\nEnter amount in USD:"
+                subject_name = credit_check.subject.full_name
+                subject_national_id = credit_check.subject.national_id
+                response = f"Which currency is credit to {subject_name} - {subject_national_id} ?\n\n1. USD\n2. Rand\n 3. ZWL"
                 person.user_mode = 'lend_money'
-                person.user_status = 'lend_amount'
+                person.user_status = 'enter_credit_currency'
                 person.set_session_data('lending_borrower_id', credit_check.subject.id)
                 person.save()
                 
@@ -785,22 +726,62 @@ class MessageHandler:
                 borrower.amount_owed = top_creditor["amount"]
                 borrower.currency = top_creditor["currency"]
                 borrower.save()
-            
-            # Create credit history
-            CreditHistory.objects.create(
-                person=borrower,
-                credit_score=credit_score,
-                total_borrowed=0,
-                total_repaid=0,
-                outstanding_balance=0,
-                default_risk='medium' if credit_score < 600 else 'low'
-            )
-            print(f"Created new borrower: {borrower.full_name}")
+                
+        return self.handle_subject_credit_records(borrower, api_data)
         
+    def handle_subject_credit_records(self, person, api_data):
+        from users.services.identity_service import (
+            fetch_individual,
+            compute_credit_score,
+            get_highest_creditor,
+            similarity,
+            normalize_phone,
+            phone_match_score,
+        )
+        if not api_data:
+            return False
+        amount_owed = 0
+        currency = "USD"
+        api_data_summary = api_data.get("summary", {})
+        oldest_creditor = get_highest_creditor(api_data.get("claims", []))
+        if oldest_creditor:
+            amount_owed = oldest_creditor["amount"]
+            currency = oldest_creditor["currency"]
+        person_credit_history = CreditHistory.objects.filter(person=person).first()
+        if not person_credit_history:
+            credit_score = compute_credit_score(api_data)
+            if credit_score >= 800:
+                default_risk = 'high'
+            elif credit_score >= 600:
+                default_risk = 'medium'
+            else:
+                default_risk = 'low'
+            CreditHistory.objects.create(
+                person=person,
+                credit_score=credit_score,
+                total_borrowed=amount_owed,
+                total_repaid=0,
+                outstanding_balance=amount_owed,
+                default_risk=default_risk,
+                total_claims=api_data_summary.get("claims_count", 0),
+                total_courts = api_data_summary.get("court_cases_count", 0),
+            )
+            return True
+        else:
+            person_credit_history.total_claims = api_data_summary.get("claims_count", 0)
+            person_credit_history.total_courts = api_data_summary.get("court_cases_count", 0)
+            person_credit_history.save()
+        return True
+    
     
     def handle_new_borrower(self, person, message_text=''):
         """Handle new borrower not found in API"""
         borrower_id = person.session_data.get('borrower_national_id',None)
+        borrower_ob = Person.objects.filter(
+                national_id=borrower_id,
+            ).first()
+        full_name = getattr(borrower_ob, 'full_name', 'Person')
+        
         if person.user_status == 'borrower_full_name':
             full_name = message_text.strip()
             if not validate_name(full_name):
@@ -815,6 +796,25 @@ class MessageHandler:
                     'mentioned_name': full_name,
                 }
             )
+            person.user_status = 'borrower_address'
+            person.save()
+            
+            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera, Zimbabwe"
+            self.whatsapp.send_message(person.phone_number, message)
+            return True
+        
+        elif person.user_status == 'borrower_address':
+            if not validate_address(message_text):
+                response = "Invalid address format. Please use the format;\n12 Grade close, Mukumba, Marondera, Zimbabwe"
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+            borrower_ob = Person.objects.filter(
+                    national_id=borrower_id,
+                ).first()
+            if borrower_ob:
+                borrower_ob.address = message_text.strip()
+                borrower_ob.save()
+            
             person.user_status = 'borrower_phone'
             person.save()
             message = f"Please type mobile number for {full_name} in the format; 0771234567"
@@ -828,31 +828,11 @@ class MessageHandler:
                 response = "*Invalid mobile number*.\nPlease type mobile number in the format; 0771234567"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
-            borrower_ob = Person.objects.filter(
-                    national_id=borrower_id,
-                ).first()
             if borrower_ob:
+                if phone_number.startswith('07'):
+                    phone_number = phone_number.replace('07', '2637', 1)
                 borrower_ob.phone_number = phone_number
                 borrower_ob.save()
-            person.user_status = 'borrower_address'
-            person.save()
-            message = f"Please type address for {full_name} in the format;\n12 Grade close, Mukumba, Marondera, Zimbabwe"
-            self.whatsapp.send_message(person.phone_number, message)
-            return True
-        
-        elif person.user_status == 'borrower_address':
-            if not validate_address(message_text):
-                response = "Invalid address format. Please use the format;\n12 Grade close, Mukumba, Marondera, Zimbabwe"
-
-                self.whatsapp.send_message(person.phone_number, response)
-                return False
-            borrower_ob = Person.objects.filter(
-                    national_id=borrower_id,
-                ).first()
-            if borrower_ob:
-                borrower_ob.address = message_text.strip()
-                borrower_ob.save()
-            
             person.user_status = 'verify_borrower_details'
             person.save()
             borrower_name = getattr(borrower_ob, 'full_name', 'N/A')
@@ -876,6 +856,15 @@ class MessageHandler:
             if message_text.lower() in ["1", "yes","1."]:
                 message = "Information saved successfully, please send a selfie of the subject holding their ID card"
                 self.whatsapp.send_message(person.phone_number, message)
+                try:
+                    from users.services.identity_service import (
+                                fetch_individual,
+                            )
+                    data = fetch_individual(borrower_id)
+                    self.handle_subject_credit_records(borrower_ob, data)
+                    print("subject data updated from api.... after adder verified subject..")
+                except:
+                    pass
                 return True
             elif message_text.lower() in ["2", "edit","2."]:
                 person.user_mode = 'edit_borrower'
@@ -908,42 +897,6 @@ class MessageHandler:
         self.whatsapp.send_message(person.phone_number, response)
         return True
     
-    def create_new_borrower_record(self, person, national_id, full_name):
-        """Create a new borrower record (unverified)"""
-        # Create unverified person record
-        borrower = Person.objects.create(
-            national_id=national_id,
-            full_name=full_name.strip(),
-            phone_number=None,  
-            is_verified=False,
-            verification_status='pending',
-            user_mode='welcome',
-            user_status='welcome',
-            credit_score=500  # Default starting score
-        )
-        
-        # Create basic credit history
-        CreditHistory.objects.create(
-            person=borrower,
-            credit_score=500,
-            total_borrowed=0,
-            total_repaid=0,
-            outstanding_balance=0,
-            default_risk='medium'
-        )
-        
-        response = "✅ *Record Created* ✅\n\n"
-        response += f"Name: {borrower.full_name}\n"
-        response += f"ID: {borrower.national_id}\n\n"
-        response += "⚠️ *Important*: This person needs to be verified.\n"
-        response += "Send their National ID/Passport photo to complete verification.\n\n"
-        
-        person.set_session_data('pending_borrower_id', borrower.id)
-        person.user_status = 'notify_unverified_borrower'
-        person.save()
-        
-        self.whatsapp.send_message(person.phone_number, response)
-        return True
     
     def handle_offer_service(self, person, message_text):
         """Handle offer service mode"""
@@ -996,47 +949,67 @@ class MessageHandler:
 
     def handle_lend_money(self, person, message_text):
         """Handle lending money flow"""
-        if person.user_status == 'lend_amount':
-            try:
-                amount = float(message_text)
-                if amount <= 0:
-                    raise ValueError("Amount must be positive")
-                    
-                borrower_id = person.get_session_key('lending_borrower_id')
-                borrower = Person.objects.get(id=borrower_id)
-                
-                # Check if borrower is verified
-                if borrower.verification_status != 'verified':
-                    response = "❌ Cannot lend to unverified person.\n\n"
-                    response += f"{borrower.full_name} needs to verify their account first."
-                    self.whatsapp.send_message(person.phone_number, response)
-                    return self.show_main_menu(person)
-                
-                # Create lending contract
-                contract = LendingContract.objects.create(
-                    lender=person,
-                    borrower=borrower,
-                    amount=amount,
-                    due_date=timezone.now() + timedelta(days=30)
-                )
-                
-                response = "✅ *Loan Contract Created!* ✅\n\n"
-                response += f"💰 Amount: ${amount:.2f}\n"
-                response += f"👤 Borrower: {borrower.full_name}\n"
-                response += f"📅 Due Date: {contract.due_date.strftime('%Y-%m-%d')}\n\n"
-                response += "The borrower has been notified."
-                
+        current_lending_contract_id = person.get_session_key('current_lending_contract_id')
+        contract = LendingContract.objects.filter(id=current_lending_contract_id).first()
+        borrower_id = person.get_session_key('lending_borrower_id')
+        borrower = Person.objects.get(id=borrower_id)
+        message_text = message_text.lower().strip()
+        
+        if person.user_status == 'enter_credit_currency':
+            if not message_text in ['usd', 'rand','zwl','1','2','3']:
+                response = "❌ Invalid currency. Please enter the valid option: 1,2 or 3."
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+            # Check if borrower is verified
+            if borrower.verification_status != 'verified':
+                response = "❌ Cannot lend to unverified person.\n\n"
+                response += f"{borrower.full_name} needs to verify their account first."
                 self.whatsapp.send_message(person.phone_number, response)
                 
-                # Notify borrower
-                borrower_response = "📢 *Loan Received* 📢\n\n"
-                borrower_response += f"You have received a loan of ${amount:.2f} from {person.full_name}.\n"
-                borrower_response += f"📅 Due Date: {contract.due_date.strftime('%Y-%m-%d')}\n\n"
-                borrower_response += "Please ensure timely repayment."
+            if message_text == '1':
+                currency = 'usd'
+            elif message_text == '2':
+                currency = 'rand'
+            elif message_text == '3':
+                currency = 'zwl'
+            # Create lending contract
+            contract = LendingContract.objects.create(
+                    lender=person,
+                    borrower=borrower,
+                    currency=currency,
+                    due_date=timezone.now() + timedelta(days=30)
+                )
+            person.set_session_data('current_lending_contract_id', contract.id)
+            person.user_status = 'lend_amount'
+            person.save()
+            response = "Enter Credit Amount:"
+            self.whatsapp.send_message(person.phone_number, response)
+            return True
+        
+        if person.user_status == 'lend_amount':
+            try:
+                if not isinstance(float(message_text), float):
+                    self.whatsapp.send_message(person.phone_number, "❌ Invalid amount. Please enter a valid number.")
+                    return False
+                amount = float(message_text)
+                if amount <= 0:
+                    self.whatsapp.send_message(person.phone_number, "❌ Invalid amount. Please enter a positive number.")
+                    return False
                 
-                self.whatsapp.send_message(borrower.phone_number, borrower_response)
-                
-                return self.show_main_menu(person)
+                # Create lending contract
+                if contract:
+                    contract.amount = amount
+                    contract.save()
+                response = "Select Credit Type:\n\n"
+                response += f"1. Cash\n"
+                response += f"2. Goods\n"
+                response += f"3. Service\n"
+                response += f"4. Loan\n"
+                response += f"5. Mukando\n"
+                self.whatsapp.send_message(person.phone_number, response)
+                person.user_status = 'enter_credit_type'
+                person.save()
+                return True
                 
             except ValueError:
                 response = "❌ Invalid amount. Please enter a valid number (e.g., 100.50):"
@@ -1047,6 +1020,102 @@ class MessageHandler:
                 self.whatsapp.send_message(person.phone_number, response)
                 return self.show_main_menu(person)
         
+        elif person.user_status =="enter_credit_type":
+            if not message_text in ['1', '2', '3', '4', '5']:
+                response = "❌ Invalid credit type. Please enter a valid option (e.g., 1, 2, 3, 4, 5):"
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+            if message_text == '1':
+                credit_type = 'cash'
+            elif message_text == '2':
+                credit_type = 'goods'
+            elif message_text == '3':
+                credit_type = 'service'
+            elif message_text == '4':
+                credit_type = 'loan'
+            elif message_text == '5':
+                credit_type = 'mukando'
+            contract.credit_type = credit_type
+            contract.save()
+            person.user_status = 'enter_end_date'
+            person.save()
+            response = "Enter Repayment Date e.g 4 July 2026 or (4/7/2026):"
+            self.whatsapp.send_message(person.phone_number, response)
+            return True
+        
+        elif person.user_status == "enter_end_date":
+            if not message_text:
+                response = (
+                    "❌ Invalid repayment date. Please enter a valid date "
+                    "(e.g., 4 July 2026 or 4/7/2026):"
+                )
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+
+            formats = [
+                "%d %B %Y",   # 4 July 2026
+                "%d %b %Y",   # 4 Jul 2026
+                "%d/%m/%Y",   # 4/7/2026
+                "%d-%m-%Y",   # 4-7-2026
+                "%Y-%m-%d",   # 2026-07-04
+            ]
+
+            due_date = None
+
+            for fmt in formats:
+                try:
+                    due_date = datetime.strptime(message_text.strip(), fmt)
+                    break
+                except ValueError:
+                    continue
+
+            if due_date is None:
+                response = (
+                    "❌ Invalid repayment date. Please enter a valid date "
+                    "(e.g., 4 July 2026 or 4/7/2026):"
+                )
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+
+            # Make timezone-aware if USE_TZ=True
+            due_date = timezone.make_aware(due_date)
+
+            contract.due_date = due_date
+            contract.save()
+            person.user_status = "confirm_credit_details"
+            person.save()
+            end_date= due_date.strftime("%d %B %Y")
+            message = f"Confirm credit to {borrower.full_name} ({borrower.national_id}) of {contract.currency}{contract.amount:.2f} for {contract.credit_type} to be repaid on {end_date}:\n\n1. Yes\n2. No\n3. Exit"
+            self.whatsapp.send_message(person.phone_number, message)
+            return True
+        
+        elif person.user_status == "confirm_credit_details":
+            if message_text == "1":
+                readable_date = contract.due_date.strftime("%d %B %Y")
+                otp = self.generate_otp()
+                contract.otp_code = otp
+                contract.save()
+                self.whatsapp.send_message(person.phone_number, f"Credit details confirmed, waiting for {borrower.full_name} to accept, you will be notified when they accept.")
+                time.sleep(1)
+                message_to_borrower =(
+                    f"If you accept receiving credit from {person.full_name} ({person.national_id})"
+                    f"of {contract.currency}{contract.amount:.2f} for {contract.credit_type}, to be repaid on {readable_date}, please insert code {otp} to confirm or 'reject' to reject."
+                )
+                borrower.user_mode='accept_credit'
+                borrower.set_session_data('pending_contract_to_confirm_id', contract.id)
+                borrower.save()
+                self.whatsapp.send_message(borrower.phone_number, message_to_borrower)
+                person.user_mode = "welcome"
+                person.save()
+                return self.handle_track_lended(person, message_text)
+            elif message_text == "2":
+                contract.status = "cancelled"
+                contract.save()
+                person.user_mode = "welcome"
+                person.save()
+                self.show_main_menu(person)
+            elif message_text == "3":
+                return self.show_main_menu(person)
         return True
     
     def handle_track_lended(self, person, message_text):
@@ -1117,6 +1186,13 @@ class MessageHandler:
         if not person.is_verified:
             self.whatsapp.send_message(person.phone_number, "Finish signup to use the CrediSafe services.")
             return False
+        person_last_message = WhatsAppMessage.objects.filter(person=person).order_by('-timestamp').first()
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        if person_last_message and person_last_message.timestamp <= one_hour_ago:
+            self.whatsapp.send_message(person.phone_number, f"Hi {person.full_name}. Welcome back to CrediSafe. Enter your pin to continue.")
+            person.user_mode='login'
+            person.save(update_fields=['user_mode'])
+            return True
         person.user_mode = 'offer_service'
         person.user_status = 'completed'
         person.save()
@@ -1136,7 +1212,38 @@ class MessageHandler:
             else:
                 code="Low Risk"
                 payment_status="🟢"
-            welcome_message += f"Your Payment Status: {payment_status}\n{code}\n\nOptions:\n"
+                
+
+            credit_taken = (
+                LendingContract.objects.filter(
+                    borrower=person,
+                    status='active'
+                ).aggregate(total=Sum('amount'))['total']
+                or Decimal('0.00')
+            )
+
+            credit_given = (
+                LendingContract.objects.filter(
+                    lender=person,
+                    status='active'
+                ).aggregate(total=Sum('amount'))['total']
+                or Decimal('0.00')
+            )
+
+            if credit_taken <=0:
+                credit_history = person.credit_histories.first()
+                if credit_history:
+                    credit_taken = credit_history.total_borrowed
+                    
+            welcome_message += (
+                f"Your Payment Status:\n"
+                f"{code} {payment_status}\n\n"
+                f"*Net Status*\n"
+                f"Credit Taken - US${credit_taken:,.2f}\n"
+                f"Credit Given - US${credit_given:,.2f}\n\n"
+                f"Options:\n"
+            )
+            
             menu = f", *{user_name}!* Please choose an option:\n\n"
             menu += "1️⃣ *Credit Services* - Check credit history and lend\n"
             menu += "2️⃣ *My Activity* - View your lending history\n"
@@ -1155,23 +1262,46 @@ class MessageHandler:
         
         return True
     
-    def format_credit_report(self, person, credit_history):
+    def format_credit_report(self, person, credit_history, is_self_check=""):
         """Format credit report for display"""
-        report = "📊 *CREDIT REPORT* 📊\n\n"
-        report += f"👤 *Name:* {person.full_name or 'N/A'}\n"
-        report += f"🆔 *ID Number:* {person.national_id}\n"
-        report += f"📱 *Phone:* {person.phone_number or 'N/A'}\n"
-        report += f"⭐ *Credit Score:* {credit_history.get('credit_score', 'N/A')}/850\n"
+        score = person.credit_score or 0
+        if score >= 800:
+            risk = "High Risk-Upper"
+            emoji = "🔴"
+        elif score >= 600:
+            risk="High Risk-Lower"
+            emoji="🟠"
+        elif score >= 300:
+            emoji="🟡"
+            risk="Medium Risk"
+        else:
+            emoji="🟢"
+            risk="Low Risk"
+        active_credit_histories = person.loans_taken.filter(status='active').count()
+        defaulted_loans_taken = person.loans_taken.filter(status='defaulted').count()
+        if defaulted_loans_taken <= 0:
+            credit_history = person.credit_histories.first()
+            if credit_history:
+                defaulted_loans_taken = credit_history.total_claims + credit_history.total_courts
         
-        if person.oldest_creditor:
-            report += f"\n🏦 *Highest Creditor:* {person.oldest_creditor}\n"
-            report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
+        report = f"*{is_self_check}Payment Status Report*\n\n"
+        report += f"*{person.national_id} -{person.full_name or 'N/A'}*\n\n"
+        report += f"*Listed Address:*\n\t{person.address}\n"
+        report += f"*Status -* {risk} {emoji}\n"
+        report += f"*Active Credit  -* {active_credit_histories}\n"
+        report += f"*In Arrears  -* {defaulted_loans_taken}"
+        
+        # if person.oldest_creditor:
+        #     report += f"\n🏦 *Highest Creditor:* {person.oldest_creditor}\n"
+        #     report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
         
         return report
     
     def initiate_credit_check(self, person, borrower):
         """Initiate the actual credit check process"""
         # Check if person is checking themselves
+        borrower_name = getattr(borrower, 'full_name', '')
+        creditor_name = getattr(person, 'full_name', 'A Private Checker')
         if borrower.phone_number == person.phone_number:
             # Self check - no SMS required
             credit_check = CreditCheck.objects.create(
@@ -1186,9 +1316,9 @@ class MessageHandler:
             credit_check.checked_at = timezone.now()
             credit_check.save()
             
-            response = self.format_credit_report(borrower, credit_history)
-            self.whatsapp.send_message(person.phone_number, response)
-            return self.show_main_menu(person)
+            response = self.format_credit_report(borrower, credit_history,f"Self ")
+            return self.whatsapp.send_message(person.phone_number, response)
+            # return self.show_main_menu(person)
         else:
             # Third party check - need OTP
             otp_code = self.generate_otp()
@@ -1202,34 +1332,49 @@ class MessageHandler:
             )
             
             # Send SMS to checker
-            sms_message = f"Your OTP for credit check is: {otp_code}. Valid for 10 minutes."
-            self.send_sms(person.phone_number, sms_message)
-            
+            message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, give them this code: *{otp_code}* if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
+            self.whatsapp.send_message(borrower.phone_number, message)
             person.user_status = 'otp_confirmation'
             person.set_session_data('current_credit_check_id', credit_check.id)
             person.save()
             
-            response = "🔐 An OTP has been sent to your phone number.\n\nPlease enter the OTP to view the credit history:"
+            response = "🔐 An OTP has been sent to the subject.\nPlease enter the OTP to view their credit history:"
             self.whatsapp.send_message(person.phone_number, response)
             return True
     
     
     def get_credit_history(self, person):
         """Get or generate credit history for a person"""
+        score = person.credit_score or 0
         try:
             credit = CreditHistory.objects.get(person=person)
+
+            if score >= 800:
+                risk = "High Risk-Upper"
+            elif score >= 600:
+                risk="High Risk-Lower"
+            elif score >= 300:
+                risk="Medium Risk"
+            else:
+                risk="Low Risk"
             return {
-                'credit_score': credit.credit_score,
+                'credit_score': person.credit_score,
                 'total_borrowed': float(credit.total_borrowed),
                 'total_repaid': float(credit.total_repaid),
                 'outstanding_balance': float(credit.outstanding_balance),
-                'default_risk': credit.default_risk,
+                'default_risk': risk,
             }
         except CreditHistory.DoesNotExist:
             # Generate credit history based on credit score
-            score = person.credit_score or 500
-            risk = 'low' if score > 700 else 'medium' if score > 550 else 'high'
-            
+   
+            if score >= 800:
+                risk = "High Risk-Upper"
+            elif score >= 600:
+                risk="High Risk-Lower"
+            elif score >= 300:
+                risk="Medium Risk"
+            else:
+                risk="Low Risk"
             return {
                 'credit_score': score,
                 'total_borrowed': 0.00,
