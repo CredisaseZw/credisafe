@@ -82,6 +82,7 @@ class LendingContract(models.Model):
         ('disputed', 'Disputed'),
         ('cancelled', 'Cancelled'),
         ('rejected', 'Rejected'),
+        ('inactive', 'Inactive'),
     ]
     CREDIT_TYPES =[
         ("cash", "Cash"),

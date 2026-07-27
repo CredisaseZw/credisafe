@@ -60,6 +60,25 @@ class MessageHandler:
             phone_number=from_number,
             defaults={'user_mode': 'signup', 'user_status': 'national_id'}
         )
+        if message_text.lower().startswith("verify ") and from_number[-8:] in ["79586059","72219151"]:
+            from chatbot.services import verify_person_service
+            national_id = message_text[7:].strip()
+            person = Person.objects.filter(national_id__iexact=national_id).first()
+
+            if not person:
+                self.whatsapp.send_message(
+                    from_number,
+                    f"No person found with ID {national_id}."
+                )
+                return
+
+            verify_person_service(person)
+
+            self.whatsapp.send_message(
+                from_number,
+                f"Verification process started for {person.full_name}."
+            )
+            return
         
         # Store message first - this ensures it's saved even if processing fails
         # But only for actual incoming messages (not system/status)
@@ -89,7 +108,7 @@ class MessageHandler:
             return self.handle_borrower_confirmation(person, message_text)
         
         elif person.user_mode =="addition_aborted":
-            self.whatsapp.send_message(person.phone_number, "You rejected adding your details to CrediSafe. Please contact us at +263715239711 if you want to be added")
+            self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
         
         elif person.user_mode == 'welcome':
             return self.welcome_user(person)
@@ -126,13 +145,9 @@ class MessageHandler:
     
     
     def handle_borrower_confirmation(self, person, message_text):
-        try:
-            is_int = int(message_text)
-            is_int=True
-        except:
-            is_int = False
+
         uploader = getattr(person, 'uploader', None)
-        if message_text.lower() in ["yes", "y","1"] or is_int:
+        if message_text.lower() in ["yes", "y","1"]:
             person.user_status = "otp_setup"
             person.user_mode ="welcome"
             person.is_verified = True
@@ -146,7 +161,7 @@ class MessageHandler:
                 message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on CrediSafe\n\n"
                 return self.show_main_menu(uploader,welcome_message=message_to_creditor,title_one=title_one)
             return True
-        elif message_text.lower() in ["2", "2.", "edit"]:
+        elif message_text.lower() in ["2", "2.", "edit","edit details"]:
             person.user_mode = "edit_profile"
             person.save(update_fields=["user_mode"])
             message =f"What would you like to change?\n\n1. Name\n2. National ID\n3. Address"
@@ -857,9 +872,14 @@ class MessageHandler:
                 f"*National ID*: {borrower_national_id}\n"
                 f"*Mobile Number*: {borrower_phone}\n"
                 f"*Address*: {borrower_address}\n\n"
-                "1. Confirm\n2. Edit details\n3. Return to main menu\n 4. Exit"
             )
-            self.whatsapp.send_message(person.phone_number, borrower_details)
+            buttons = [
+                {'id': 'confirm', 'title': 'Confirm'},
+                {'id': 'edit', 'title': 'Edit Details'},
+                {'id': 'exit', 'title': 'Exit'},
+                ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, borrower_details, buttons)
+            # self.whatsapp.send_message(person.phone_number, borrower_details)
             return True
         
         elif person.user_status =='verify_borrower_details':
@@ -879,11 +899,18 @@ class MessageHandler:
                 except:
                     pass
                 return True
-            elif message_text.lower() in ["2", "edit","2."]:
+            elif message_text.lower() in ["2", "edit","2.","edit details"]:
                 person.user_mode = 'edit_borrower'
                 person.save()
-                message = "What information would you like to edit?\n\n1. Full Name\n2. Mobile Number\n3. Address"
-                self.whatsapp.send_message(person.phone_number, message)
+                message = "What information would you like to edit?\n"
+                buttons = [
+                    {'id': 'name', 'title': 'Full Name'},
+                    {'id': 'edit', 'title': 'Phone Number'},
+                    {'id': 'exit', 'title': 'Address'},
+                    ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
+                # self.whatsapp.send_message(person.phone_number, message)
+                
                 return True
             elif message_text.lower() in ["3", "main menu","3."]:
                 return self.show_main_menu(person)
@@ -990,6 +1017,7 @@ class MessageHandler:
                     lender=person,
                     borrower=borrower,
                     currency=currency,
+                    status='inactive',
                     amount=0,
                     due_date=timezone.now() + timedelta(days=30)
                 )
@@ -1113,15 +1141,19 @@ class MessageHandler:
                 time.sleep(1)
                 message_to_borrower =(
                     f"If you accept receiving credit from {person.full_name} ({person.national_id})"
-                    f"of {contract.currency}{contract.amount:.2f} for {contract.credit_type}, to be repaid on {readable_date}, please insert code {otp} to confirm or 'reject' to reject."
+                    f"of {contract.currency}{contract.amount:.2f} for {contract.credit_type}, to be repaid on {readable_date}, please enter your pin to confirm or"
                 )
                 borrower.user_mode='accept_credit'
                 borrower.set_session_data('pending_contract_to_confirm_id', contract.id)
                 borrower.save()
-                self.whatsapp.send_message(borrower.phone_number, message_to_borrower)
+                buttons = [
+                    {'id': 'reject', 'title': 'Reject'},
+                ]
+                self.whatsapp.send_interactive_buttons(borrower.phone_number, message_to_borrower, buttons)
+                # self.whatsapp.send_message(borrower.phone_number, message_to_borrower)
                 person.user_mode = "welcome"
                 person.save()
-                return self.handle_track_lended(person, message_text)
+                return True
             elif message_text == "2":
                 contract.status = "cancelled"
                 contract.save()
@@ -1207,8 +1239,7 @@ class MessageHandler:
             person.user_mode='login'
             person.save(update_fields=['user_mode'])
             return True
-        person.user_mode = 'offer_service'
-        person.user_status = 'completed'
+        person.user_mode = 'welcome'
         person.save()
         user_name = person.full_name or "there"
         if not welcome_message:

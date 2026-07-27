@@ -232,36 +232,22 @@ def health_check(request):
 @csrf_exempt
 @api_view(['POST'])
 def verify_person(request, person_id):
-    from users.models import Person
-    from chatbot.whatsapp_client import WhatsAppClient
-    import random
-    whatsapp = WhatsAppClient()
+    from chatbot.services import verify_person_service
+    from chatbot.models import Person
     try:
         person = Person.objects.get(id=person_id)
-        if getattr(person,'uploader',None):
-            random_number = random.randint(1000, 9999)
-            subject_details = (
-                "Do you accept addition of your details below to CrediSafe;\n\n"
-                f"Name: {person.full_name}\n"
-                f"ID Number: {person.national_id}\n"
-                f"Address: {person.address}\n"
-                f"Mobile Number: {person.phone_number}\n"
-                f"\n1. Yes, type code *{random_number}* below\n"
-                "2. Edit details\n3. Reject"
-            )
-            
-            person.user_mode = 'borrower_confirmation'
-            person.save(update_fields=['user_mode'])
-            whatsapp.send_message(person.phone_number, subject_details)
-        else:
-            person.verification_status = 'verified'
-            person.is_verified = True
-            person.save(update_fields=['verification_status', 'is_verified'])
-            whatsapp.send_message(person.phone_number, "Congratulations! Your account has been verified on CrediSafe, send hi to get started.")
-        return Response({'status': 'ok', 'message': 'Person verified'}, status=200)
-    except Person.DoesNotExist:
-        return Response({'status': 'error', 'message': 'Person not found'}, status=404)
+        verify_person_service(person)
 
+        return Response({
+            'status': 'ok',
+            'message': 'Person verified'
+        })
+
+    except Person.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Person not found'
+        }, status=404)
 
 def is_valid_zimbabwe_phone(phone: str) -> bool:
     """
