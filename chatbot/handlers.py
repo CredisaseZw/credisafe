@@ -678,9 +678,9 @@ class MessageHandler:
                 subject_national_id = credit_check.subject.national_id
                 response = f"Which currency is credit to {subject_name} - {subject_national_id} ?\n\n1. USD\n2. Rand\n3. ZWL"
                 buttons = [
-                            {'id': 'lend_money', 'title': 'USD'},
-                            {'id': 'track_lended', 'title': 'Rand'},
-                            {'id': 'settle_debt', 'title': 'ZWL'}
+                            {'id': 'usd', 'title': 'USD'},
+                            {'id': 'rand', 'title': 'Rand'},
+                            {'id': 'zwl', 'title': 'ZWL'}
                         ]
                 self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
                 person.user_mode = 'lend_money'
@@ -925,9 +925,9 @@ class MessageHandler:
             # response += "Example: 63-1234567A12 or 12345678A90"
             # response += "\n\nreply exit, or q to return to main menu"
             
-            self.whatsapp.send_message(person.phone_number, response)
+            return self.whatsapp.send_message(person.phone_number, response)
             
-        elif normalized in ['2', 'track lended', 'track', '📊 track lended', 'track_lended']:
+        elif normalized in ['2', 'usd', 'track', 'rand', 'zwl']:
             return self.handle_track_lended(person, None)
             
         elif normalized in ['3', 'settle debt', 'settle', '✅ settle debt', 'settle_debt']:
@@ -974,10 +974,10 @@ class MessageHandler:
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
             # Check if borrower is verified
-            if borrower.verification_status != 'verified':
+            if not borrower.is_verified:
                 response = "❌ Cannot lend to unverified person.\n\n"
                 response += f"{borrower.full_name} needs to verify their account first."
-                self.whatsapp.send_message(person.phone_number, response)
+                return self.whatsapp.send_message(person.phone_number, response)
                 
             if message_text in ['1','usd']:
                 currency = 'usd'
