@@ -4,7 +4,7 @@ import string
 from datetime import datetime, timedelta
 from django.utils import timezone
 from users.models import Person
-from credit.models import CreditCheck, CreditHistory, LendingContract, CreditCheckAudit
+from credit.models import CreditCheck, CreditHistory, LendingContract, CreditCheckAudit, Receipt
 from chatbot.whatsapp_client import WhatsAppClient
 import logging
 from chatbot.models import WhatsAppMessage
@@ -131,6 +131,12 @@ class MessageHandler:
         elif person.user_mode =="accept_credit":
             return self.handle_accept_credit(person, message_text)
         
+        elif person.user_mode == "accounting":
+            return self.handle_accounting(person, message_text)
+        elif person.user_mode == 'receipting':
+            return self.handle_receipting(person, message_text)
+        elif person.user_mode == 'statements':
+            return self.handle_statements(person, message_text)
         
         elif person.user_mode == 'track_lended':
             # return self.whatsapp.send_message(person.phone_number, "Tracking Logic in dev..")
@@ -143,6 +149,194 @@ class MessageHandler:
         else:
             return self.show_main_menu(person)
     
+    def handle_receipting(self, person, message_text):
+        if person.user_status == "receipt_date":
+            # Handle receipt date here
+            selected_credit_to_receipt = person.get_session_key("selected_credit_to_receipt")
+            credit = LendingContract.objects.filter(id=selected_credit_to_receipt).first()
+            if not credit:
+                self.whatsapp.send_message(person.phone_number, "An error occurred. Please try again.")
+                person.user_status = None
+                person.save(update_fields=["user_status"])
+                return self.show_main_menu(person)
+            if not message_text:
+                response = (
+                    "❌ Invalid receipt date. Please enter a valid date "
+                    "(e.g., 4 July 2026 or 4/7/2026):"
+                )
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+
+            formats = [
+                "%d %B %Y",   # 4 July 2026
+                "%d %b %Y",   # 4 Jul 2026
+                "%d/%m/%Y",   # 4/7/2026
+                "%d-%m-%Y",   # 4-7-2026
+                "%Y-%m-%d",   # 2026-07-04
+            ]
+
+            due_date = None
+
+            for fmt in formats:
+                try:
+                    due_date = datetime.strptime(message_text.strip(), fmt)
+                    break
+                except ValueError:
+                    continue
+
+            if due_date is None:
+                response = (
+                    "❌ Invalid receipt date. Please enter a valid date "
+                    "(e.g., 4 July 2026 or 4/7/2026):"
+                )
+                self.whatsapp.send_message(person.phone_number, response)
+                return False
+
+            # Make timezone-aware if USE_TZ=True
+            due_date = timezone.make_aware(due_date)
+            receipt_ob =Receipt.objects.create(
+                lending_contract=credit,
+                receipt_date=due_date,
+                confirmed=False
+            )
+            person.user_status = "enter_receipt_amount"
+            person.set_session_data("pending_receipt_id", receipt_ob.id)
+            person.save()
+            message = f"Please enter received amount from {credit.borrower.full_name} ({credit.borrower.national_id}) "
+            self.whatsapp.send_message(person.phone_number, message)
+            return True
+        
+        elif person.user_status == "enter_receipt_amount":
+            pending_receipt_id = person.get_session_key("pending_receipt_id")
+            receipt = Receipt.objects.filter(id=pending_receipt_id).first()
+            if not receipt:
+                self.whatsapp.send_message(person.phone_number, "An error occurred. Please try again. \n RCA-101")
+                return self.show_main_menu(person)
+            try:
+                amount = Decimal(message_text.strip())
+                if amount <= 0:
+                    raise ValueError
+            except:
+                self.whatsapp.send_message(person.phone_number, "Invalid amount. Please enter a valid number.")
+                return False
+            currency = receipt.lending_contract.currency
+            receipt.amount = amount
+            receipt.currency = currency  # Default to contract currency
+            receipt.save(update_fields=["amount", "currency"])
+            person.user_status = "receipt_confirmation"
+            person.save(update_fields=["user_status"])
+            receipt_date= receipt.receipt_date.strftime("%d %B %Y")
+            message = f"You have received {currency}{amount} from {receipt.lending_contract.borrower.full_name} ({receipt.lending_contract.borrower.national_id}) on {receipt_date}"
+            buttons = [
+                {'id': 'confirm', 'title': "Confirm"},
+                {'id': 'back', 'title': 'Back'},
+                {'id': 'exit', 'title': 'Exit'},
+            ]
+            return self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
+        
+        elif person.user_status == "receipt_confirmation":
+            if message_text.lower() == "confirm":
+                receipt_id = person.get_session_key("pending_receipt_id")
+                receipt = Receipt.objects.filter(id=receipt_id).first()
+                if not receipt:
+                    self.whatsapp.send_message(person.phone_number, "An error occurred. Please try again. \n RCA-102")
+                    return self.show_main_menu(person)
+                receipt.confirmed = True
+                receipt.save(update_fields=["confirmed"])
+                person.user_mode = "welcome"
+                person.save(update_fields=["user_mode"])
+                self.whatsapp.send_message(person.phone_number, "Receipt confirmed successfully.")
+                borrower_ob = receipt.lending_contract.borrower
+                balance_left = receipt.lending_contract.amount - receipt.lending_contract.receipts.filter(confirmed=True).aggregate(total=Sum('amount'))['total'] or 0
+                borrower_credit_history = self.get_credit_history(self. borrower_ob)
+                borrower_payment_status = borrower_credit_history.get('default_risk', 'Low Risk')
+                message_to_borrower = f"Hi {borrower_ob.full_name}. This is confirmation of your payment of {receipt.currency}{receipt.amount} to {receipt.lending_contract.lender.full_name} balance left is {receipt.currency}{balance_left}. Your payment status is {borrower_payment_status}."
+                return self.whatsapp.send_message(borrower_ob.phone_number, message_to_borrower)
+        
+        
+        credits_given = LendingContract.objects.filter(
+            lender=person,
+            status="active"
+        ).order_by("created_at")
+        # If the user has replied with a number
+        if message_text.isdigit():
+            choice = int(message_text)
+
+            # Convert QuerySet to a list
+            credits = list(credits_given)
+
+            if 1 <= choice <= len(credits):
+                selected_credit = credits[choice - 1]  # because lists are 0-based
+
+                borrower = selected_credit.borrower
+                national_id = borrower.national_id
+
+                # Do whatever you need
+                self.whatsapp.send_message(
+                    person.phone_number,
+                    f"Please enter receipt date from {borrower.full_name} ({national_id})"
+                )
+                person.user_status = "receipt_date"
+                person.set_session_data("selected_credit_to_receipt", selected_credit.id)
+                person.save()
+                return
+
+            self.whatsapp.send_message(
+                person.phone_number,
+                "Invalid selection. Please choose a valid number."
+            )
+            return
+
+        # Otherwise send the menu
+        receipt_menu = "Receipt\n"
+
+        credits = list(credits_given)
+
+        if not credits:
+            self.whatsapp.send_message(
+                person.phone_number,
+                "You have no active credits to receipt."
+            )
+            person.user_mode = "welcome"
+            person.save(update_fields=["user_mode"])
+            return self.show_main_menu(person)
+
+        for i, credit in enumerate(credits, start=1):
+            receipt_menu += (
+                f"{i}. {credit.borrower.full_name}"
+                f" ({credit.borrower.national_id})"
+                f" - {credit.currency}{credit.amount}\n"
+            )
+
+        receipt_menu += "\nOther\nBack\nExit"
+
+        return self.whatsapp.send_message(person.phone_number, receipt_menu)
+    
+    def handle_statements(self,person,message_text):
+        return self.whatsapp.send_message(person.phone_number, "This feature is in development")
+    
+    def handle_accounting(self, person, message_text):
+        if message_text.lower() == "receipting":
+            person.user_mode = "receipting"
+            person.save(update_fields=["user_mode"])
+            return self.handle_receipting(person, message_text)
+        elif message_text.lower() == "statement":
+            person.user_mode = "statements"
+            person.save(update_fields=["user_mode"])
+            return self.handle_statements(person, message_text)
+        if person.user_mode == 'receipting':
+            if message_text.lower() in ['1', '1.', 'receipting']:
+                return self.handle_receipting(person, message_text)
+        if person.user_mode == 'statements':
+            if message_text.lower() in ['2', '2.', 'statement']:
+                return self.handle_statements(person, message_text)
+        else:
+            buttons = [
+                {'id': 'receipting', 'title': "Receipting"},
+                {'id': 'statement', 'title': 'Statement'},
+                {'id': 'exit', 'title': 'Exit'},
+            ]
+            return self.whatsapp.send_interactive_buttons(person.phone_number, "Accounting", buttons)
     
     def handle_borrower_confirmation(self, person, message_text):
 
@@ -198,7 +392,7 @@ class MessageHandler:
             otp = int(message_text)
         except:
             return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the code to accept or 'reject' to reject.")
-        if contract.otp_code == otp:
+        if person.otp_code == otp:
             contract.status = "active"
             contract.save(update_fields=["status"])
             message_to_subject = "Credit has been accepted."

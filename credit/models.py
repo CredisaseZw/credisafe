@@ -139,3 +139,26 @@ class CreditCheckAudit(models.Model):
         indexes = [
             models.Index(fields=['credit_check', 'created_at']),
         ]
+
+class Receipt(models.Model):
+    """Track receipts for repayments"""
+    lending_contract = models.ForeignKey(LendingContract, on_delete=models.CASCADE, related_name='receipts')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    currency = models.CharField(max_length=5,choices=[
+        ('rand', 'ZAR'),
+        ('usd', 'USD'),
+        ('zwl', 'ZWL'),
+    ],default='usd')
+    receipt_date = models.DateTimeField(null=True, blank=True)
+    confirmed = models.BooleanField(default=False)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['lending_contract', 'confirmed']),
+            models.Index(fields=['receipt_date']),
+        ]
+    
+    def __str__(self):
+        return f"Receipt for {self.lending_contract} - Amount: {self.amount} - Confirmed: {self.confirmed}"

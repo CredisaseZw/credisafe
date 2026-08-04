@@ -69,6 +69,8 @@ class Person(models.Model):
         ('suspension', 'Suspended'),
         ('addition_aborted', 'Addition Aborted'),
         ('accept_credit', 'Accept Credit'),
+        ('receipting', 'Receipting'),
+        ('accounting', 'Accounting'),
         
     ]
     
@@ -104,6 +106,13 @@ class Person(models.Model):
         ('enter_end_date', 'Enter End Date'),
         ('confirm_credit_details', 'Confirm Credit'),
         ('accept_credit', 'Accept Credit'),
+        ('enter_receipt_amount', 'Enter Receipt Amount'),
+        ('enter_receipt_currency', 'Enter Receipt Currency'),
+        ('receipting', 'Receipting'),
+        ('receipted', 'Receipted'),
+        ('receipt_confirmation', 'Receipt Confirmation'),
+        ('receipt_confirmed', 'Receipt Confirmed'),
+        ('receipt_date', 'Receipt Date'),
         
     ]
     
