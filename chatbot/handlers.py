@@ -110,8 +110,6 @@ class MessageHandler:
         elif person.user_mode =="addition_aborted":
             self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
         
-        elif person.user_mode == 'welcome':
-            return self.welcome_user(person)
         elif person.user_mode == "edit_borrower":
             self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
         elif person.user_mode =='borrower_signup':
@@ -122,7 +120,7 @@ class MessageHandler:
         elif person.user_mode == 'credit_check' or message_text.lower() =="give credit":
             
             return self.handle_credit_check(person, message_text)
-        elif person.user_mode == 'offer_service':
+        elif person.user_mode == 'offer_service' or message_text.lower() in ["status check", "check"]:
             # return self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
             return self.handle_offer_service(person, message_text)
         elif person.user_mode == 'lend_money':
@@ -146,6 +144,8 @@ class MessageHandler:
             return self.whatsapp.send_message(person.phone_number, "This feature is in development")
             
             return self.handle_settle_debt(person, message_text)
+        elif person.user_mode == 'welcome':
+            return self.welcome_user(person)
         else:
             return self.show_main_menu(person)
     
@@ -1420,7 +1420,7 @@ class MessageHandler:
         return self.show_main_menu(person)
 
     
-    def show_main_menu(self, person,welcome_message="",title_one="Status Check",title_two="Track Lending"):
+    def show_main_menu(self, person,welcome_message="",title_one="Status Check",title_two="Accounting"):
         """Display main menu options"""
         # Reset mode to offer_service
         if not person.is_verified:
@@ -1494,7 +1494,7 @@ class MessageHandler:
         # Send as interactive buttons if supported
         buttons = [
             {'id': 'lend_money', 'title': title_one},
-            # {'id': 'track_lended', 'title': '📊 Track Lended'},
+            {'id': 'accounting', 'title': title_two},
             # {'id': 'settle_debt', 'title': '✅ Settle Debt'}
         ]
         self.whatsapp.send_interactive_buttons(person.phone_number, welcome_message, buttons)
