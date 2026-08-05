@@ -1589,6 +1589,16 @@ class MessageHandler:
                 
                 response = "🔐 An OTP has been sent to the subject.\nPlease enter the OTP to view their credit history:"
                 return self.whatsapp.send_message(person.phone_number, response)
+            
+            subject_name = borrower.full_name
+            subject_national_id = borrower.national_id
+            response = f"Which currency is credit to {subject_name} - {subject_national_id} ?"
+            buttons = [
+                        {'id': 'usd', 'title': 'USD'},
+                        {'id': 'rand', 'title': 'Rand'},
+                        {'id': 'zwl', 'title': 'ZWL'}
+                    ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
             person.user_mode = 'lend_money'
             person.user_status = 'enter_credit_currency'
             person.set_session_data('lending_borrower_id', credit_check.subject.id)
