@@ -771,6 +771,9 @@ class MessageHandler:
             person.set_session_data('borrower_national_id', nid)
             person.user_status = 'fetching_borrower_data'
             person.save()
+            if person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
+                if borrower_ob.uploader == person and borrower_ob.created_at.date() == timezone.now().date():
+                    require_otp=False
             
             # Show loading message
             self.whatsapp.send_typing_indicator(person.phone_number)
