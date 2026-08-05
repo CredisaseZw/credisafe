@@ -891,7 +891,7 @@ class MessageHandler:
                 
                 subject_name = credit_check.subject.full_name
                 subject_national_id = credit_check.subject.national_id
-                response = f"Which currency is credit to {subject_name} - {subject_national_id} ?\n\n1. USD\n2. Rand\n3. ZWL"
+                response = f"Which currency is credit to {subject_name} - {subject_national_id} ?"
                 buttons = [
                             {'id': 'usd', 'title': 'USD'},
                             {'id': 'rand', 'title': 'Rand'},

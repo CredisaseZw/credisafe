@@ -114,6 +114,7 @@ class Person(models.Model):
         ('receipt_confirmation', 'Receipt Confirmation'),
         ('receipt_confirmed', 'Receipt Confirmed'),
         ('receipt_date', 'Receipt Date'),
+        ('offer_lending', 'Offer Lending'),
         
     ]
     
