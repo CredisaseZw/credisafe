@@ -1080,7 +1080,7 @@ class MessageHandler:
             if "[Image]" in message_text:
                 self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify the details.")
                 return True
-            if message_text.lower() in ["1", "yes","1."]:
+            if message_text.lower() in ["1", "yes","1.","confirm"]:
                 message = "Information saved successfully, please send a selfie of the subject holding their ID card"
                 self.whatsapp.send_message(person.phone_number, message)
                 try:
