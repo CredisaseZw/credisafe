@@ -89,6 +89,7 @@ class Person(models.Model):
         ('request_borrower_info', 'Requesting Borrower Payment Information'),
         ('borrower_id', 'Awaiting Borrower National ID'),
         ('borrower_phone', 'Awaiting Borrower Phone Number'),
+        ('give_credit', 'Awaiting Credit Details'),
         ('borrower_full_name', 'Awaiting Borrower Full Name'),
         ('borrower_address', 'Awaiting Borrower Address'),
         ('credit_review', 'Viewing Credit History'),
