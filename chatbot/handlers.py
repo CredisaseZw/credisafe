@@ -747,7 +747,9 @@ class MessageHandler:
         """Handle credit check flow with API integration"""
         from users.services.identity_service import fetch_individual, compute_credit_score, get_highest_creditor
         from users.utils.validators import normalize_national_id, is_valid_zim_national_id
-        
+        require_otp=True
+        if message_text.lower() =="give credit":
+            require_otp=False
         # Check if user is verified
         if not person.is_verified:
             response = "🔒 *Verification Required* 🔒\n\n"
@@ -796,7 +798,7 @@ class MessageHandler:
                         person.user_status="borrower_address"
                         return self.handle_new_borrower(person, nid)
                     
-                    return self.initiate_credit_check(person, borrower_ob)
+                    return self.initiate_credit_check(person, borrower_ob,require_otp=require_otp)
                         
                 if not borrower_ob:
                     # Person not found in API or DB - create new record
@@ -902,7 +904,11 @@ class MessageHandler:
             else:
                 return self.show_main_menu(person)
         
-        return True
+        person.user_mode = 'credit_check'
+        person.user_status = 'borrower_id'
+        person.save()
+        
+        return self.whatsapp.send_message(person.phone_number, "Please enter the National ID of the person you want to give credit to eg 12345678A90")
     
     def handle_existing_borrower(self, person, api_data, national_id, borrower=None):
         """Handle borrower that exists in API"""
@@ -1536,7 +1542,7 @@ class MessageHandler:
         
         return report
     
-    def initiate_credit_check(self, person, borrower):
+    def initiate_credit_check(self, person, borrower, require_otp=True):
         """Initiate the actual credit check process"""
         # Check if person is checking themselves
         borrower_name = getattr(borrower, 'full_name', '')
@@ -1569,16 +1575,21 @@ class MessageHandler:
                 otp_code=otp_code,
                 expires_at=timezone.now() + timedelta(minutes=10)
             )
-            
-            # Send SMS to checker
-            message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, give them this code: *{otp_code}* if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
-            self.whatsapp.send_message(borrower.phone_number, message)
-            person.user_status = 'otp_confirmation'
             person.set_session_data('current_credit_check_id', credit_check.id)
-            person.save()
             
-            response = "🔐 An OTP has been sent to the subject.\nPlease enter the OTP to view their credit history:"
-            self.whatsapp.send_message(person.phone_number, response)
+            if require_otp:
+            # Send SMS to checker
+                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, give them this code: *{otp_code}* if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
+                self.whatsapp.send_message(borrower.phone_number, message)
+                person.user_status = 'otp_confirmation'
+                person.save()
+                
+                response = "🔐 An OTP has been sent to the subject.\nPlease enter the OTP to view their credit history:"
+                return self.whatsapp.send_message(person.phone_number, response)
+            person.user_mode = 'lend_money'
+            person.user_status = 'enter_credit_currency'
+            person.set_session_data('lending_borrower_id', credit_check.subject.id)
+            person.save()
             return True
     
     
