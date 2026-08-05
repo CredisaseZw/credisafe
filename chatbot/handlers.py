@@ -872,6 +872,7 @@ class MessageHandler:
                     person.set_session_data('pending_credit_check', credit_check.id)
                     person.user_status = 'offer_lending'
                     person.save()
+                    return True
                     
                 else:
                     response = "❌ Invalid OTP. Please try again:"
