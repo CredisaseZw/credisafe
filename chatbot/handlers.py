@@ -242,7 +242,8 @@ class MessageHandler:
                     self.whatsapp.send_message(person.phone_number, "An error occurred. Please try again. \n RCA-102")
                     return self.show_main_menu(person)
                 receipt.confirmed = True
-                receipt.save(update_fields=["confirmed"])
+                receipt.confirmed_at = timezone.now()
+                receipt.save(update_fields=["confirmed", "confirmed_at"])
                 person.user_mode = "welcome"
                 person.save(update_fields=["user_mode"])
                 contract = receipt.lending_contract
