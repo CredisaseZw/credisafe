@@ -129,7 +129,7 @@ class MessageHandler:
         elif person.user_mode =="accept_credit":
             return self.handle_accept_credit(person, message_text)
         
-        elif person.user_mode == "accounting":
+        elif person.user_mode == "accounting" or message_text.lower() in ["accounting", "receipt"]:
             return self.handle_accounting(person, message_text)
         elif person.user_mode == 'receipting':
             return self.handle_receipting(person, message_text)
@@ -336,6 +336,8 @@ class MessageHandler:
                 {'id': 'statement', 'title': 'Statement'},
                 {'id': 'exit', 'title': 'Exit'},
             ]
+            person.user_mode = "accounting"
+            person.save(update_fields=["user_mode"])
             return self.whatsapp.send_interactive_buttons(person.phone_number, "Accounting", buttons)
     
     def handle_borrower_confirmation(self, person, message_text):
@@ -1334,7 +1336,8 @@ class MessageHandler:
                 return False
 
             # Make timezone-aware if USE_TZ=True
-            due_date = timezone.make_aware(due_date)
+            
+            due_date = datetime.strptime(message_text.strip(), fmt).date()
 
             contract.due_date = due_date
             contract.save()
