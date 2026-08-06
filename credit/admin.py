@@ -1,6 +1,67 @@
 from django.contrib import admin
-from .models import CreditHistory, CreditCheck, LendingContract, CreditCheckAudit
+from .models import CreditHistory, CreditCheck, LendingContract, CreditCheckAudit, Receipt
 
+
+@admin.register(Receipt)
+class ReceiptAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "lending_contract",
+        "amount",
+        "currency",
+        "receipt_date",
+        "confirmed",
+        "confirmed_at",
+        "created_at",
+    )
+
+    list_filter = (
+        "confirmed",
+        "currency",
+        "receipt_date",
+        "created_at",
+    )
+
+    search_fields = (
+        "lending_contract__id",
+        "lending_contract__lender__full_name",
+        "lending_contract__borrower__full_name",
+        "lending_contract__lender__phone_number",
+        "lending_contract__borrower__phone_number",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "confirmed_at",
+    )
+
+    autocomplete_fields = ("lending_contract",)
+
+    ordering = ("-created_at",)
+
+    list_per_page = 25
+
+    fieldsets = (
+        ("Receipt Details", {
+            "fields": (
+                "lending_contract",
+                "amount",
+                "currency",
+                "receipt_date",
+            )
+        }),
+        ("Confirmation", {
+            "fields": (
+                "confirmed",
+                "confirmed_at",
+            )
+        }),
+        ("Metadata", {
+            "fields": (
+                "created_at",
+            )
+        }),
+    )
 @admin.register(CreditHistory)
 class CreditHistoryAdmin(admin.ModelAdmin):
     list_display = ['person', 'credit_score', 'outstanding_balance', 'default_risk']

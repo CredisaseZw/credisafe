@@ -149,7 +149,7 @@ class Receipt(models.Model):
         ('usd', 'USD'),
         ('zwl', 'ZWL'),
     ],default='usd')
-    receipt_date = models.DateTimeField(null=True, blank=True)
+    receipt_date = models.DateField(null=True, blank=True)
     confirmed = models.BooleanField(default=False)
     confirmed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -179,7 +179,8 @@ class MessageHandler:
 
             for fmt in formats:
                 try:
-                    due_date = datetime.strptime(message_text.strip(), fmt)
+                    due_date = datetime.strptime(message_text.strip(), fmt).date()
+
                     break
                 except ValueError:
                     continue
@@ -193,7 +194,6 @@ class MessageHandler:
                 return False
 
             # Make timezone-aware if USE_TZ=True
-            due_date = timezone.make_aware(due_date)
             receipt_ob =Receipt.objects.create(
                 lending_contract=credit,
                 receipt_date=due_date,
@@ -245,12 +245,28 @@ class MessageHandler:
                 receipt.save(update_fields=["confirmed"])
                 person.user_mode = "welcome"
                 person.save(update_fields=["user_mode"])
+                contract = receipt.lending_contract
+
+                total_paid = (
+                    contract.receipts
+                    .filter(confirmed=True)
+                    .aggregate(total=Sum("amount"))["total"]
+                    or Decimal("0.00")
+                )
+
+                balance_left = contract.amount - total_paid
+                if total_paid >= contract.amount:
+                    contract.status = "settled"
+                    contract.settled_at = timezone.now()
+                    contract.save(update_fields=["status", "settled_at"])
+
+                    balance_left = Decimal("0.00")
+                
                 self.whatsapp.send_message(person.phone_number, "Receipt confirmed successfully.")
-                borrower_ob = receipt.lending_contract.borrower
-                balance_left = receipt.lending_contract.amount - receipt.lending_contract.receipts.filter(confirmed=True).aggregate(total=Sum('amount'))['total'] or 0
-                borrower_credit_history = self.get_credit_history(self. borrower_ob)
+                borrower_ob = contract.borrower
+                borrower_credit_history = self.get_credit_history(self, borrower_ob)
                 borrower_payment_status = borrower_credit_history.get('default_risk', 'Low Risk')
-                message_to_borrower = f"Hi {borrower_ob.full_name}. This is confirmation of your payment of {receipt.currency}{receipt.amount} to {receipt.lending_contract.lender.full_name} balance left is {receipt.currency}{balance_left}. Your payment status is {borrower_payment_status}."
+                message_to_borrower = f"Hi {borrower_ob.full_name}. This is confirmation of your payment of {receipt.currency}{receipt.amount} to {contract.lender.full_name} balance left is {receipt.currency}{balance_left}. Your payment status is {borrower_payment_status}."
                 return self.whatsapp.send_message(borrower_ob.phone_number, message_to_borrower)
         
         
