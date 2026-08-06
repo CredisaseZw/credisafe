@@ -264,7 +264,7 @@ class MessageHandler:
                 
                 self.whatsapp.send_message(person.phone_number, "Receipt confirmed successfully.")
                 borrower_ob = contract.borrower
-                borrower_credit_history = self.get_credit_history(self, borrower_ob)
+                borrower_credit_history = self.get_credit_history(borrower_ob)
                 borrower_payment_status = borrower_credit_history.get('default_risk', 'Low Risk')
                 message_to_borrower = f"Hi {borrower_ob.full_name}. This is confirmation of your payment of {receipt.currency}{receipt.amount} to {contract.lender.full_name} balance left is {receipt.currency}{balance_left}. Your payment status is {borrower_payment_status}."
                 return self.whatsapp.send_message(borrower_ob.phone_number, message_to_borrower)
