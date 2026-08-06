@@ -392,10 +392,11 @@ class MessageHandler:
             otp = int(message_text)
         except:
             return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the pin to accept or click 'reject' to reject.")
+        
         if not person.otp_code:
             person.otp_code = otp
             person.save(update_fields=["otp_code"])
-        if person.otp_code == otp:
+        if int(person.otp_code) == otp:
             contract.status = "active"
             contract.save(update_fields=["status"])
             person.set_session_data("pending_contract_to_confirm_id",None)
@@ -411,7 +412,12 @@ class MessageHandler:
             return self.whatsapp.send_message(person.phone_number, "Wrong code. Please try again.")
     
     def handle_login(self, person, message_text):
-        if person.otp_code == message_text:
+        try:
+            otp = int(message_text)
+        except ValueError:
+            return self.whatsapp.send_message(person.phone_number, "Invalid PIN. Please type your pincode to use Credisafe.")
+
+        if int(person.otp_code) == otp:
 
             incoming = (
                 WhatsAppMessage.objects.filter(
