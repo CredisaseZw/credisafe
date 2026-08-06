@@ -343,7 +343,7 @@ class MessageHandler:
         uploader = getattr(person, 'uploader', None)
         if message_text.lower() in ["yes", "y","1"]:
             person.user_status = "otp_setup"
-            person.user_mode ="welcome"
+            person.user_mode ="signup"
             person.is_verified = True
             person.verification_status = "verified"
             person.save(update_fields=["user_status","user_mode","is_verified","verification_status"])
@@ -391,10 +391,14 @@ class MessageHandler:
         try:
             otp = int(message_text)
         except:
-            return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the code to accept or 'reject' to reject.")
+            return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the pin to accept or click 'reject' to reject.")
+        if not person.otp_code:
+            person.otp_code = otp
+            person.save(update_fields=["otp_code"])
         if person.otp_code == otp:
             contract.status = "active"
             contract.save(update_fields=["status"])
+            person.set_session_data("pending_contract_to_confirm_id",None)
             message_to_subject = "Credit has been accepted."
             self.whatsapp.send_message(person.phone_number, message_to_subject)
             readable_date = contract.due_date.strftime("%d %B %Y")

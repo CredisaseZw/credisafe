@@ -17,7 +17,7 @@ class PersonAdmin(admin.ModelAdmin):
             'fields': ('user_mode', 'user_status', 'is_verified', 'credit_score', 'amount_owed', 'currency', 'name_match_score', 'phone_match_score','verification_status')
         }),
         ('Session', {
-            'fields': ('session_data', 'last_interaction')
+            'fields': ('session_data', 'last_interaction','otp_code')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
