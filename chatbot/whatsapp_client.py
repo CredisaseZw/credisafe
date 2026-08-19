@@ -151,7 +151,6 @@ class WhatsAppClient:
         import time
         try:
             to_number = self._clean_phone_number(to_number)
-            
             # Enable disappearing messages if requested
             if enable_disappearing:
                 enabled = self._ensure_disappearing_enabled(to_number)
@@ -179,6 +178,45 @@ class WhatsAppClient:
                 
         except Exception as e:
             logger.error(f"WhatsApp send error: {str(e)}")
+            return None
+    
+    def send_media(
+        self,
+        to_number: str,
+        media_type: str,
+        media_url: str,
+        caption: str = ""
+    ):
+        """Send media via WhatsApp using Whapi."""
+
+        try:
+            to_number = self._clean_phone_number(to_number)
+
+            # Whapi endpoint is based on the media type
+            endpoint = f"{self.base_url}/messages/{media_type}"
+
+            payload = {
+                "to": to_number,
+                "media": media_url,
+            }
+
+            if caption:
+                payload["caption"] = caption
+
+            response = requests.post(
+                endpoint,
+                headers=self.headers,
+                json=payload,
+                timeout=60
+            )
+
+            if response.status_code in [200, 201]:
+                return response.json()
+
+            return None
+
+        except Exception as e:
+            logger.error(f"WhatsApp media send error: {str(e)}")
             return None
     
     def delete_message(self, message_id: str) -> bool:

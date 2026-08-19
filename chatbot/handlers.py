@@ -120,7 +120,7 @@ class MessageHandler:
         elif person.user_mode == 'credit_check' or message_text.lower() =="give credit":
             
             return self.handle_credit_check(person, message_text)
-        elif person.user_mode == 'offer_service' or message_text.lower() in ["status check", "check"]:
+        elif person.user_mode == 'offer_service' or message_text.lower() in ["payment status check", "check"]:
             # return self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
             return self.handle_offer_service(person, message_text)
         elif person.user_mode == 'lend_money':
@@ -190,7 +190,12 @@ class MessageHandler:
                     "❌ Invalid receipt date. Please enter a valid date "
                     "(e.g., 4 July 2026 or 4/7/2026):"
                 )
-                self.whatsapp.send_message(person.phone_number, response)
+                buttons = [
+                            {'id': 'exit', 'title': 'Exit'},
+                            ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
+                        
+                # self.whatsapp.send_message(person.phone_number, response)
                 return False
 
             # Make timezone-aware if USE_TZ=True
@@ -217,7 +222,12 @@ class MessageHandler:
                 if amount <= 0:
                     raise ValueError
             except:
-                self.whatsapp.send_message(person.phone_number, "Invalid amount. Please enter a valid number.")
+                buttons = [
+                            {'id': 'exit', 'title': 'Exit'},
+                            ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid amount. Please enter a valid number or", buttons)
+                        
+                # self.whatsapp.send_message(person.phone_number, "Invalid amount. Please enter a valid number.")
                 return False
             currency = receipt.lending_contract.currency
             receipt.amount = amount
@@ -291,7 +301,7 @@ class MessageHandler:
                 # Do whatever you need
                 self.whatsapp.send_message(
                     person.phone_number,
-                    f"Please enter receipt date from {borrower.full_name} ({national_id})"
+                    f"Please enter receipt date from {borrower.full_name} ({national_id}) \ne.g. 30/7/2026 for `30th July 2026`)"
                 )
                 person.user_status = "receipt_date"
                 person.set_session_data("selected_credit_to_receipt", selected_credit.id)
@@ -377,8 +387,14 @@ class MessageHandler:
         elif message_text.lower() in ["2", "2.", "edit","edit details"]:
             person.user_mode = "edit_profile"
             person.save(update_fields=["user_mode"])
-            message =f"What would you like to change?\n\n1. Name\n2. National ID\n3. Address"
-            return self.whatsapp.send_message(person.phone_number, message)
+            message =f"What would you like to change?"
+            buttons = [
+                {'id': '1', 'title': "Name"},
+                {'id': '2', 'title': 'National ID'},
+                {'id': '3', 'title': 'Address'},
+                # {'id': 'exit', 'title': 'Exit'},
+            ]
+            return self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
         
         elif message_text.lower() in ["3.", "3","reject"]:
             person.verification_status = "rejected"
@@ -391,8 +407,12 @@ class MessageHandler:
                 self.whatsapp.send_message(uploader.phone_number, message_to_creditor)
             return True
         else:
-            return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type 'yes' or 'no'.")
-    
+            buttons = [
+                {'id': '1', 'title': "Yes"},
+                {'id': '2', 'title': 'No'},
+            ]
+            return self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid response. Please click 'yes' or 'no'.", buttons)
+
     def handle_accept_credit(self, person, message_text):
         pending_contract_to_confirm_id = person.get_session_key("pending_contract_to_confirm_id")
         contract = LendingContract.objects.filter(id=pending_contract_to_confirm_id).first()
@@ -623,10 +643,17 @@ class MessageHandler:
                 'user_status'
             ])
 
-            self.whatsapp.send_message(
+            media_sent =self.whatsapp.send_media(
                 person.phone_number,
-                "Please send a selfie holding your National ID/Passport."
+                "image",
+                "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
+                "Please upload a clear image of yourself holding your National ID/Passport like this."
             )
+            if media_sent is None:
+                self.whatsapp.send_message(
+                    person.phone_number,
+                    "Please send a selfie holding your National ID/Passport. like the example below."
+                )
             return True
         
         # =========================================================
@@ -792,7 +819,7 @@ class MessageHandler:
             nid = normalize_national_id(message_text)
             
             if not is_valid_zim_national_id(nid):
-                response = "❌ Invalid ID number format. Please enter a valid ID (e.g., 63-1234567A12 or 12345678A90):"
+                response = "❌ Invalid ID number format. Please enter a valid ID (e.g., 63-1234567A12 or 12345678A90)\n\n> reply exit to return to main menu"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
             
@@ -822,7 +849,7 @@ class MessageHandler:
                         self.whatsapp.send_message(person.phone_number, response)
                         return True
                     if person.verification_status == 'rejected':
-                        response = f"This person has been rejected using CrediSafe services."
+                        response = f"This person rejected using CrediSafe services."
                         self.whatsapp.send_message(person.phone_number, response)
                         return True
                     if not borrower_ob.address:
@@ -904,7 +931,7 @@ class MessageHandler:
                     return True
                     
                 else:
-                    response = "❌ Invalid OTP. Please try again:"
+                    response = "❌ Invalid OTP. Please try again \n\n> reply exit to return to main menu"
                     self.whatsapp.send_message(person.phone_number, response)
                     return False
                     
@@ -941,7 +968,7 @@ class MessageHandler:
         person.user_status = 'borrower_id'
         person.save()
         
-        return self.whatsapp.send_message(person.phone_number, "Please enter the National ID of the person you want to give credit to eg 12345678A90")
+        return self.whatsapp.send_message(person.phone_number, "Please enter the National ID of the person you want to give credit to eg 12345678A90 \n\n> reply exit to return to main menu")
     
     def handle_existing_borrower(self, person, api_data, national_id, borrower=None):
         """Handle borrower that exists in API"""
@@ -1046,7 +1073,7 @@ class MessageHandler:
         if person.user_status == 'borrower_full_name':
             full_name = message_text.strip()
             if not validate_name(full_name):
-                response = "Please type Full Name and Surname eg: John Doe"
+                response = "Please type Full Name and Surname eg: John Doe\n\n> reply exit to return to main menu"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
             new_borrower, created = Person.objects.get_or_create(
@@ -1060,7 +1087,7 @@ class MessageHandler:
             person.user_status = 'borrower_address'
             person.save()
             
-            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera, Zimbabwe"
+            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera, Zimbabwe\n\n> reply exit to return to main menu"
             self.whatsapp.send_message(person.phone_number, message)
             return True
         
@@ -1086,7 +1113,7 @@ class MessageHandler:
             from chatbot.validators import is_valid_zimbabwe_phone
             phone_number = message_text.strip()
             if not is_valid_zimbabwe_phone(phone_number):
-                response = "*Invalid mobile number*.\nPlease type mobile number in the format; 0771234567"
+                response = "*Invalid mobile number*.\nPlease type mobile number in the format; 0771234567\n\n> reply exit to return to main menu"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
             if borrower_ob:
@@ -1120,8 +1147,15 @@ class MessageHandler:
                 self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify the details.")
                 return True
             if message_text.lower() in ["1", "yes","1.","confirm"]:
-                message = "Information saved successfully, please send a selfie of the subject holding their ID card"
-                self.whatsapp.send_message(person.phone_number, message)
+                media_sent =self.whatsapp.send_media(
+                    person.phone_number,
+                    "image",
+                    "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
+                    "Information saved successfully, please send a selfie of the subject holding their ID card"
+                )
+                if media_sent is None:
+                    message = "Information saved successfully, please send a selfie of the subject holding their ID card"
+                    self.whatsapp.send_message(person.phone_number, message)
                 try:
                     from users.services.identity_service import (
                                 fetch_individual,
@@ -1166,21 +1200,27 @@ class MessageHandler:
         person.user_mode = 'borrower_signup'
         person.save()
         
-        response = "Sorry, that ID number was not found in database. Would you like to add user?\n\n1. Yes\n2. No"
-        self.whatsapp.send_message(person.phone_number, response)
+        response = "Sorry, that ID number was not found in database. Would you like to add the individual?\n\n"
+        buttons = [
+            {'id': 'yes', 'title': 'Yes'},
+            {'id': 'no', 'title': 'No'},
+            {'id': 'exit', 'title': 'Exit'},
+        ]
+        self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
+        # self.whatsapp.send_message(person.phone_number, response)
         return True
     
     
     def handle_offer_service(self, person, message_text):
         """Handle offer service mode"""
         normalized = message_text.lower().strip()
-        if normalized in ['1', 'lend money', 'lend', 'status check', 'lend_money']:
+        if normalized in ['1', 'lend money', 'lend', 'payment status check', 'lend_money']:
             person.user_mode = 'credit_check'
             person.user_status = 'borrower_id'
             person.save()
             
             # response = "🔍 *Credit Check* 🔍\n\n"
-            response = "Please enter the ID Number here like 12345678A90\n"
+            response = "Please enter the ID Number here like 12345678A90 \n\n> reply exit to return to main menu\n"
             # response += "________________________________\n"
             # response += "Example: 63-1234567A12 or 12345678A90"
             # response += "\n\nreply exit, or q to return to main menu"
@@ -1460,7 +1500,7 @@ class MessageHandler:
         return self.show_main_menu(person)
 
     
-    def show_main_menu(self, person,welcome_message="",title_one="Status Check",title_two="Accounting"):
+    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Accounting"):
         """Display main menu options"""
         # Reset mode to offer_service
         if not person.is_verified:
@@ -1510,6 +1550,7 @@ class MessageHandler:
             )
 
             if credit_taken <=0:
+                payment_status ="`N/A`"
                 credit_history = person.credit_histories.first()
                 if credit_history:
                     credit_taken = credit_history.total_borrowed
