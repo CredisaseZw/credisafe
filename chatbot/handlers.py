@@ -943,8 +943,11 @@ class MessageHandler:
         elif person.user_status == 'offer_lending':
             if message_text.lower() in ['yes', 'y','sure']:
                 credit_check_id = person.get_session_key('pending_credit_check')
-                credit_check = CreditCheck.objects.get(id=credit_check_id)
-                
+                credit_check = CreditCheck.objects.filter(id=credit_check_id).first()
+                if not credit_check:
+                    response = "Session expired. Please start over."
+                    self.whatsapp.send_message(person.phone_number, response)
+                    return self.show_main_menu(person)
                 subject_name = credit_check.subject.full_name
                 subject_national_id = credit_check.subject.national_id
                 response = f"Which currency is credit to {subject_name} - {subject_national_id} ?"
@@ -1627,6 +1630,8 @@ class MessageHandler:
         # Check if person is checking themselves
         borrower_name = getattr(borrower, 'full_name', '')
         creditor_name = getattr(person, 'full_name', 'A Private Checker')
+        if not person or not borrower:
+            return self.whatsapp.send_message(person.phone_number, "Error fetching subject details. Please try again later. ICC-001")
         if borrower.phone_number == person.phone_number:
             # Self check - no SMS required
             credit_check = CreditCheck.objects.create(
