@@ -876,7 +876,7 @@ class MessageHandler:
                     self.whatsapp.send_message(person.phone_number, response)
                     return True
                 else:
-                    response = "❌ Error fetching credit data. Please try again later."
+                    response = "❌ Error fetching credit data. Please try again later. CRC-101"
                     self.whatsapp.send_message(person.phone_number, response)
                     return self.show_main_menu(person)
         
