@@ -832,8 +832,8 @@ class MessageHandler:
             
             # Check if person exists in DB first
             borrower_ob = Person.objects.filter(national_id=nid).first()
-            
-            if person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
+
+            if borrower_ob and person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
                 if borrower_ob and borrower_ob.uploader == person and borrower_ob.created_at.date() == timezone.now().date():
                     require_otp=False
             
@@ -1026,6 +1026,9 @@ class MessageHandler:
             normalize_phone,
             phone_match_score,
         )
+        if person is None:
+            self.handle_new_borrower(person, message_text='')
+        
         if not api_data:
             return False
         amount_owed = 0
