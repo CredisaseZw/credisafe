@@ -1555,7 +1555,7 @@ class MessageHandler:
             )
 
             if credit_taken <=0:
-                payment_status ="`N/A`"
+                payment_status ="`—`"
                 credit_history = person.credit_histories.first()
                 if credit_history:
                     credit_taken = credit_history.total_borrowed
