@@ -995,6 +995,7 @@ class MessageHandler:
                 borrower.currency = top_creditor["currency"]
             borrower.save()
             print(f"Updated existing borrower: {borrower.full_name}")
+
         # else:
         #     # Create new person record (not verified yet)
         #     borrower = Person.objects.create(
@@ -1039,7 +1040,7 @@ class MessageHandler:
             amount_owed = oldest_creditor["amount"]
             currency = oldest_creditor["currency"]
         person_credit_history = CreditHistory.objects.filter(person=person).first()
-        if not person_credit_history:
+        if not person_credit_history and person:
             credit_score = compute_credit_score(api_data)
             if credit_score >= 800:
                 default_risk = 'high'
@@ -1068,9 +1069,9 @@ class MessageHandler:
     def handle_new_borrower(self, person, message_text=''):
         """Handle new borrower not found in API"""
         borrower_id = person.session_data.get('borrower_national_id',None)
-        borrower_ob = Person.objects.filter(
-                national_id=borrower_id,
-            ).first()
+        person, _ = Person.objects.get_or_create(
+            national_id=borrower_id,
+        )
         full_name = getattr(borrower_ob, 'full_name', 'Person')
         
         if person.user_status == 'borrower_full_name':
