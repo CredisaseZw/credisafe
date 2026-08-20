@@ -510,7 +510,7 @@ class MessageHandler:
             return True
             
         if person.user_mode == 'welcome':
-            welcome_message = "Welcome to CrediSafe. You are not yet a user. Please enter your ID number to continue."
+            welcome_message = "Welcome to CrediSafe. You are not yet a user. Please enter your ID number to continue. use format 12345678A90"
             self.whatsapp.send_message(person.phone_number, welcome_message)
         elif person.user_mode =="signup":
             self.whatsapp.send_message(person.phone_number, "Please finish signup to continue.")
