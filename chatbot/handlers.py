@@ -833,17 +833,17 @@ class MessageHandler:
             # Check if person exists in DB first
             borrower_ob = Person.objects.filter(national_id=nid).first()
 
-            if borrower_ob and person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
+            if person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
                 if borrower_ob and borrower_ob.uploader == person and borrower_ob.created_at.date() == timezone.now().date():
                     require_otp=False
             
             # Fetch data from API
             try:
                 api_data = fetch_individual(nid)
-                if api_data:
                     # Person exists in API
-                    self.handle_existing_borrower(person, api_data, nid, borrower_ob)
                 if borrower_ob:
+                    if api_data:
+                        self.handle_existing_borrower(person, api_data, nid, borrower_ob)
                     if not borrower_ob.is_verified and borrower_ob.address:
                         response = f"This person is not yet verified, wait for verification updates\nRegards,\nCrediSafe"
                         self.whatsapp.send_message(person.phone_number, response)
@@ -1069,9 +1069,10 @@ class MessageHandler:
     def handle_new_borrower(self, person, message_text=''):
         """Handle new borrower not found in API"""
         borrower_id = person.session_data.get('borrower_national_id',None)
-        person, _ = Person.objects.get_or_create(
+
+        person = Person.objects.filter(
             national_id=borrower_id,
-        )
+        ).first()
         full_name = getattr(borrower_ob, 'full_name', 'Person')
         
         if person.user_status == 'borrower_full_name':
@@ -1195,9 +1196,9 @@ class MessageHandler:
             person.save(update_fields=['user_status'])
             if borrower_id:
                 
-                message = f"ID Number {borrower_id} \n Please type Full Name and Surname"
+                message = f"ID Number {borrower_id} \n Please type Full Name and Surname eg John Doe or John Bob Doe"
             else:
-                message ="Please type Full Name and Surname"
+                message ="Please type Full Name and Surname eg John Doe or John Bob Doe"
             self.whatsapp.send_message(person.phone_number, message)
             return True
 
