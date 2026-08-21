@@ -162,7 +162,7 @@ class WhatsAppClient:
                 "to": to_number,
                 "body": message,
             }
-            time.sleep(0.5)
+            time.sleep(1)
             response = requests.post(
                 f"{self.base_url}/messages/text",
                 headers=self.headers,

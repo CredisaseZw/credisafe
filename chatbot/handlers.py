@@ -106,6 +106,8 @@ class MessageHandler:
         
         elif person.user_mode =="borrower_confirmation":
             return self.handle_borrower_confirmation(person, message_text)
+        elif person.user_mode =="accept_status_check":
+            return self.handle_accept_status_check(person, message_text)
         
         elif person.user_mode =="addition_aborted":
             self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
@@ -149,6 +151,81 @@ class MessageHandler:
         else:
             return self.show_main_menu(person)
     
+    
+    def handle_accept_status_check(self, person, message_text):
+        #Person object here is the person being checked
+        pending_credit_check = person.get_session_key("pending_credit_check_id")
+        credit_check = CreditCheck.objects.filter(id=pending_credit_check).first()
+        if not credit_check:
+            self.whatsapp.send_message(person.phone_number, "No pending credit check found. Please contact support if you believe this is an error.")
+            person.user_mode = "welcome"
+            person.save(update_fields=["user_mode"])
+            return self.show_main_menu(person)
+        checker = credit_check.checker
+        
+        if credit_check.is_expired():
+            credit_check.status = "expired"
+            credit_check.save(update_fields=["status"])
+            self.whatsapp.send_message(person.phone_number, f"The credit check request has expired, wait for {checker.full_name} to initiate a new request.")
+            return self.whatsapp.send_message(checker.phone_number, f"The credit check request has expired. Please initiate a new request.")
+        if message_text.lower() in ["reject", "no", "cancel", "exit"]:
+            if credit_check:
+                credit_check.status = "rejected"
+                person.user_mode = "welcome"
+                person.save(update_fields=["user_mode"])
+                credit_check.save(update_fields=["status"])
+                message_to_checker = f"{person.full_name} ({person.national_id}) has rejected your payment status check request."
+                self.whatsapp.send_message(credit_check.checker.phone_number, message_to_checker)
+                return self.whatsapp.send_message(person.phone_number, "You have rejected the payment status check request.")
+                # time.sleep(1)
+            # return self.show_main_menu(person)
+        
+        try:
+            otp_code = int(message_text.strip())
+        except ValueError:
+            buttons = [
+                {'id':'cancel', 'title': 'Cancel'},
+                {'id': 'exit', 'title': 'Exit'},
+            ]
+            return self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid PIN. Please type your pincode to use Credisafe.", buttons)
+        if int(person.otp_code) == otp_code:
+            message_to_checker = f"{person.full_name} ({person.national_id}) has accepted your payment status check request, waiting for the report to be generated."
+            self.whatsapp.send_message(checker.phone_number, message_to_checker)
+            credit_check.status = 'verified'
+            credit_check.otp_verified_at = timezone.now()
+            credit_check.save()
+            
+            credit_history = self.get_credit_history(person)
+            credit_check.credit_history_snapshot = credit_history
+            credit_check.status = 'completed'
+            credit_check.checked_at = timezone.now()
+            credit_check.save()
+            
+            CreditCheckAudit.objects.create(
+                credit_check=credit_check,
+                action='credit_viewed',
+                details={'method': 'otp_verified'},
+                performed_by_phone=person.phone_number
+            )
+            response = self.format_credit_report(person, credit_history)
+            self.whatsapp.send_message(checker.phone_number, response)
+            time.sleep(3)
+            subject_name = person.full_name
+            subject_national_id = person.national_id
+            response = f"Would you like to give credit to {subject_name} - {subject_national_id}?\n\n"
+            buttons = [
+                        {'id': 'lend_money', 'title': 'Yes'},
+                        {'id': 'no', 'title': 'No'},
+                        # {'id': 'settle_debt', 'title': '✅ Settle Debt'}
+                    ]
+            self.whatsapp.send_interactive_buttons(checker.phone_number, response, buttons)
+            # self.whatsapp.send_message(checker.phone_number, response)
+            checker.user_status = 'offer_lending'
+            checker.save()
+            return True
+        else:
+            return self.whatsapp.send_message(person.phone_number, "Invalid PIN, please type your correct pincode before the request expires.")
+
     def handle_receipting(self, person, message_text):
         if person.user_status == "receipt_date":
             # Handle receipt date here
@@ -444,7 +521,7 @@ class MessageHandler:
             readable_date = contract.due_date.strftime("%d %B %Y")
             person.user_mode = "welcome"
             person.save(update_fields=["user_mode"])
-            message_to_creditor = f"{person.full_name}({person.phone_number}) has confirmed taking credit from you of {contract.currency}{contract.amount} for {contract.credit_type} to be repaid on {readable_date}."
+            message_to_creditor = f"{person.full_name}({person.national_id}) has confirmed taking credit from you of {contract.currency}{contract.amount} for {contract.credit_type} to be repaid on {readable_date}."
             self.whatsapp.send_message(contract.lender.phone_number, message_to_creditor)
             return True
         else:
@@ -1664,12 +1741,15 @@ class MessageHandler:
             
             if require_otp:
             # Send SMS to checker
-                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, give them this code: *{otp_code}* if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
+                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, enter your OTP if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
                 self.whatsapp.send_message(borrower.phone_number, message)
-                person.user_status = 'otp_confirmation'
-                person.save()
+                borrower.user_mode='accept_status_check'
+                borrower.set_session_data('pending_credit_check_id', credit_check.id)
+                borrower.save()
+                # person.user_status = 'otp_confirmation'
+                # person.save()
                 
-                response = "🔐 An OTP has been sent to the subject.\nPlease enter the OTP to view their credit history:"
+                response = f"A payment status check has been requested to {borrower_name}, you will receive an update once they respond."
                 return self.whatsapp.send_message(person.phone_number, response)
             
             subject_name = borrower.full_name

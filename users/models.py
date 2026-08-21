@@ -71,6 +71,7 @@ class Person(models.Model):
         ('accept_credit', 'Accept Credit'),
         ('receipting', 'Receipting'),
         ('accounting', 'Accounting'),
+        ('accept_status_check', 'Accept Status Check'),
         
     ]
     

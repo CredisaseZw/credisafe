@@ -30,6 +30,7 @@ class CreditCheck(models.Model):
         ('completed', 'Completed'),
         ('failed', 'Failed'),
         ('expired', 'Expired'),
+        ('rejected', 'Rejected'),
     ]
     
     CHECK_TYPE_CHOICES = [
