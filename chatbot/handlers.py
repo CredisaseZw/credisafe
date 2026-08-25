@@ -194,7 +194,8 @@ class MessageHandler:
             credit_check.status = 'verified'
             credit_check.otp_verified_at = timezone.now()
             credit_check.save()
-            
+            time.sleep(1)
+            self.whatsapp.send_message(person.phone_number, f"You have accepted the payment status check request from {checker.full_name}.")
             credit_history = self.get_credit_history(person)
             credit_check.credit_history_snapshot = credit_history
             credit_check.status = 'completed'
@@ -221,6 +222,7 @@ class MessageHandler:
             self.whatsapp.send_interactive_buttons(checker.phone_number, response, buttons)
             # self.whatsapp.send_message(checker.phone_number, response)
             checker.user_status = 'offer_lending'
+            checker.user_mode='credit_check'
             checker.save()
             return True
         else:
@@ -929,11 +931,12 @@ class MessageHandler:
                         response = f"This person rejected using CrediSafe services."
                         self.whatsapp.send_message(person.phone_number, response)
                         return True
+                    if person.get_session_key('direct_lending'):
+                        return self.initiate_credit_check(person, borrower_ob,require_otp=False)
                     if not borrower_ob.address:
                         person.user_mode="borrower_signup"
                         person.user_status="borrower_address"
                         return self.handle_new_borrower(person, nid)
-                    
                     return self.initiate_credit_check(person, borrower_ob,require_otp=require_otp)
                         
                 if not borrower_ob:
@@ -1046,7 +1049,10 @@ class MessageHandler:
         
         person.user_mode = 'credit_check'
         person.user_status = 'borrower_id'
+        if message_text.lower() =='give credit':
+            person.set_session_data('direct_lending', True)
         person.save()
+        
         
         return self.whatsapp.send_message(person.phone_number, "Please enter the National ID of the person you want to give credit to eg 12345678A90 \n\n> reply exit to return to main menu")
     
@@ -1511,6 +1517,7 @@ class MessageHandler:
                 self.whatsapp.send_interactive_buttons(borrower.phone_number, message_to_borrower, buttons)
                 # self.whatsapp.send_message(borrower.phone_number, message_to_borrower)
                 person.user_mode = "welcome"
+                person.set_session_data('direct_lending',False)
                 person.save()
                 return True
             elif message_text == "2":
@@ -1585,7 +1592,7 @@ class MessageHandler:
         return self.show_main_menu(person)
 
     
-    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Accounting"):
+    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Accounting",title_three="Give Credit"):
         """Display main menu options"""
         # Reset mode to offer_service
         if not person.is_verified:
@@ -1652,7 +1659,7 @@ class MessageHandler:
             menu = f", *{user_name}!* Please choose an option:\n\n"
             menu += "1️⃣ *Credit Services* - Check credit history and lend\n"
             menu += "2️⃣ *My Activity* - View your lending history\n"
-            menu += "3️⃣ *Settle Debt* - Mark loan as settled\n\n"
+            menu += "3️⃣ *Give Credit* - Offer credit to others\n\n"
             menu += "Reply with the option number 1, 2, or 3."
         
         # self.whatsapp.send_message(person.phone_number, menu)
@@ -1661,7 +1668,7 @@ class MessageHandler:
         buttons = [
             {'id': 'lend_money', 'title': title_one},
             {'id': 'accounting', 'title': title_two},
-            # {'id': 'settle_debt', 'title': '✅ Settle Debt'}
+            {'id': 'give_credit', 'title': title_three}
         ]
         self.whatsapp.send_interactive_buttons(person.phone_number, welcome_message, buttons)
         
