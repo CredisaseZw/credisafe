@@ -838,13 +838,15 @@ class MessageHandler:
                 f"Name: {name}\n"
                 f"ID Number: {national_id}\n"
                 f"Address: {address}\n" 
-                f"Mobile Number: {mobile_number}\n\n"
-                "1. *Confirm*\n"
-                "2. *Edit*\n"
-                "3. *Exit*"
+                f"Mobile Number: {mobile_number}"
             )
+            buttons =[
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Cancel'}
+            ]
 
-            self.whatsapp.send_message(person.phone_number, message_to_send)
+            self.whatsapp.send_interactive_message(person.phone_number, message_to_send, buttons)
             return True
         
         # =========================================================
@@ -898,7 +900,7 @@ class MessageHandler:
             nid = normalize_national_id(message_text)
             
             if not is_valid_zim_national_id(nid):
-                response = "❌ Invalid ID number format. Please enter a valid ID (e.g., 63-1234567A12 or 12345678A90)\n\n> reply exit to return to main menu"
+                response = "❌ Invalid ID number format. Please enter a valid ID (e.g. 12345678A90)\n\n> reply exit to return to main menu"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
             
@@ -1492,8 +1494,13 @@ class MessageHandler:
             person.user_status = "confirm_credit_details"
             person.save()
             end_date= due_date.strftime("%d %B %Y")
-            message = f"Confirm credit to {borrower.full_name} ({borrower.national_id}) of {contract.currency}{contract.amount:.2f} for {contract.credit_type} to be repaid on {end_date}:\n\n1. Yes\n2. No\n3. Exit"
-            self.whatsapp.send_message(person.phone_number, message)
+            buttons =[
+                {"type": "reply", "reply": {"id": "1", "title": "Yes"}},
+                {"type": "reply", "reply": {"id": "2", "title": "No"}},
+                {"type": "reply", "reply": {"id": "3", "title": "Exit"}},
+            ]
+            message = f"Confirm credit to {borrower.full_name} ({borrower.national_id}) of {contract.currency}{contract.amount:.2f} for {contract.credit_type} to be repaid on {end_date}"
+            self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
             return True
         
         elif person.user_status == "confirm_credit_details":
@@ -1606,6 +1613,7 @@ class MessageHandler:
             person.save(update_fields=['user_mode'])
             return True
         person.user_mode = 'welcome'
+        person.user_status='welcome'
         person.save()
         user_name = person.full_name or "there"
         if not welcome_message:
