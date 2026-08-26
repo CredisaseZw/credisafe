@@ -633,7 +633,7 @@ class MessageHandler:
             if not is_valid_zim_national_id(nid):
                 self.whatsapp.send_message(
                     person.phone_number,
-                    "Invalid National ID format. Please use the format 63-1234567A12 or 12345678A90."
+                    "Invalid National ID format. Please put it in the format 12345678A90."
                 )
                 return False
 
@@ -778,7 +778,7 @@ class MessageHandler:
             if not is_valid_zim_national_id(nid):
                 self.whatsapp.send_message(
                     person.phone_number,
-                    "Invalid National ID format. Please use the format 63-1234567A12 or 12345678A90."
+                    "Invalid National ID format. Please put it in the format 12345678A90."
                 )
                 return False
             person.national_id = nid
@@ -1592,7 +1592,7 @@ class MessageHandler:
         return self.show_main_menu(person)
 
     
-    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Accounting",title_three="Give Credit"):
+    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Give Credit",title_three="Accounting"):
         """Display main menu options"""
         # Reset mode to offer_service
         if not person.is_verified:
@@ -1642,7 +1642,7 @@ class MessageHandler:
             )
 
             if credit_taken <=0:
-                payment_status ="`—`"
+                payment_status ="`-`"
                 credit_history = person.credit_histories.first()
                 if credit_history:
                     credit_taken = credit_history.total_borrowed
