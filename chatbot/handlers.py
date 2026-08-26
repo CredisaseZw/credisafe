@@ -1495,9 +1495,9 @@ class MessageHandler:
             person.save()
             end_date= due_date.strftime("%d %B %Y")
             buttons =[
-                {"type": "reply", "reply": {"id": "1", "title": "Yes"}},
-                {"type": "reply", "reply": {"id": "2", "title": "No"}},
-                {"type": "reply", "reply": {"id": "3", "title": "Exit"}},
+                {"id": "yes", "title": "Yes"},
+                {"id": "no", "title": "No"},
+                {"id": "exit", "title": "Exit"},
             ]
             message = f"Confirm credit to {borrower.full_name} ({borrower.national_id}) of {contract.currency}{contract.amount:.2f} for {contract.credit_type} to be repaid on {end_date}"
             self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
