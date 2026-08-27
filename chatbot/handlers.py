@@ -731,7 +731,7 @@ class MessageHandler:
             if media_sent is None:
                 self.whatsapp.send_message(
                     person.phone_number,
-                    "Please send a selfie holding your National ID/Passport. like the example below."
+                    "Please send a selfie visibly holding your National ID/Passport."
                 )
             return True
         
@@ -823,8 +823,13 @@ class MessageHandler:
             elif message_text == '2' or message_text.lower() in ["edit", "no","2."]:
                 person.user_mode = "edit_profile"
                 person.save(update_fields=['user_mode'])
-                message = "What do you want to edit?\n\n1. Name\n2. ID Number\n3. Address"
-                self.whatsapp.send_message(person.phone_number, message)
+                message = "What do you want to edit?"
+                buttons = [
+                    {'id': '1', 'title': 'Name'},
+                    {'id': '2', 'title': 'ID Number'},
+                    {'id': '3', 'title': 'Address'},
+                ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
                 return True
             elif message_text == '3' or message_text.lower() in ["exit", "quit", "q","cancel"]:
                 self.whatsapp.send_message(person.phone_number, "Signup has been cancelled.")
@@ -846,7 +851,7 @@ class MessageHandler:
                 {'id': '3', 'title': 'Cancel'}
             ]
 
-            self.whatsapp.send_interactive_message(person.phone_number, message_to_send, buttons)
+            self.whatsapp.send_interactive_buttons(person.phone_number, message_to_send, buttons)
             return True
         
         # =========================================================
@@ -860,8 +865,12 @@ class MessageHandler:
             person.otp_code = message_text
             person.user_status = "completed"
             person.user_mode = "welcome"
-            person.save(update_fields=['otp_code', 'user_status', 'user_mode'])
-            self.whatsapp.send_message(person.phone_number, "Pin code set successfully! Please remember it for future access. \n\nStay tuned for account verification updates.")
+            person.is_verified = True
+            person.verification_status='verified'
+            person.save(update_fields=['otp_code', 'user_status', 'user_mode', 'is_verified', 'verification_status'])
+            
+            self.show_main_menu(person)
+            # self.whatsapp.send_message(person.phone_number, "Pin code set successfully! Please remember it for future access. \n\nStay tuned for account verification updates.")
             time.sleep(5)
             last_message = (
                 WhatsAppMessage.objects.filter(
