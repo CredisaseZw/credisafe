@@ -8,8 +8,9 @@ class User(AbstractUser):
     role = models.CharField(max_length=50, choices=[
         ('admin', 'Admin'),
         ('agent', 'Agent'),
-        ('support', 'Support')
-    ], default='agent')
+        ('general', 'General'),
+        ('client', 'Client User'),
+    ], default='general')
     
     groups = models.ManyToManyField(
         'auth.Group',
@@ -26,6 +27,14 @@ class User(AbstractUser):
         verbose_name='user permissions',
         help_text='Specific permissions for this user.'
     )
+    is_client_user = models.BooleanField(default=False)
+    company = models.ForeignKey(
+        'Company',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
     
     class Meta:
         db_table = 'custom_user'  # Use custom table name to avoid conflicts
@@ -35,6 +44,28 @@ class User(AbstractUser):
     
     def __str__(self):
         return f"{self.username} - {self.phone_number}"
+
+
+
+class Company(models.Model):
+    """Company model for client users"""
+    name = models.CharField(max_length=200)
+    registration_number = models.CharField(max_length=50, unique=True)
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=15)
+    email = models.EmailField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['registration_number']),
+        ]
+    
+    def __str__(self):
+        return self.name
 
 
 class Person(models.Model):
@@ -49,7 +80,13 @@ class Person(models.Model):
         null=True,
         blank=True,
     )
-    
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='persons'
+    )
     # User mode and status tracking
     USER_MODES = [
         ('signup', 'Signup Mode'),

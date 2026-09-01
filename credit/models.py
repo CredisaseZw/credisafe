@@ -102,7 +102,15 @@ class LendingContract(models.Model):
         ('usd', 'USD'),
         ('zwl', 'ZWL'),
     ],default='usd')
+    company = models.ForeignKey(
+        'users.Company',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contracts'
+    )
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    instalment_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     otp_code = models.CharField(max_length=6, null=True, blank=True)
@@ -110,6 +118,9 @@ class LendingContract(models.Model):
     settled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True) 
+    lodge_date = models.DateField(null=True, blank=True, help_text="Date the loan was put in the system")
+    start_date = models.DateField(null=True, blank=True, help_text="Date the loan starts")
+    
     
     class Meta:
         indexes = [

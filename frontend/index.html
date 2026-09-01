@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CrediSafe - Credit Management System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Use Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Your custom styles here */
+      .btn-primary {
+        background-color: #176987;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        transition: all 0.2s;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary:hover {
+        background-color: #0e4a61;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        transform: translateY(-1px);
+      }
+      .btn-secondary {
+        background-color: #e5e7eb;
+        color: #374151;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        transition: all 0.2s;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-secondary:hover {
+        background-color: #d1d5db;
+      }
+      .input-field {
+        width: 100%;
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        outline: none;
+        transition: all 0.2s;
+        background-color: white;
+        font-size: 1rem;
+      }
+      .input-field:focus {
+        border-color: #176987;
+        box-shadow: 0 0 0 3px rgba(23, 105, 135, 0.1);
+      }
+      .label-text {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.25rem;
+      }
+      /* Sidebar styles */
+      .sidebar {
+        width: 256px;
+        background: white;
+        border-right: 1px solid #e2e8f0;
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      /* Add other custom styles as needed */
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
