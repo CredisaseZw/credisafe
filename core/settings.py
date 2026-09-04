@@ -42,10 +42,12 @@ ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "chatbot.credi-safe.com",
+    "credisafe.vercel.app",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://chatbot.credi-safe.com",
+    "https://credisafe.vercel.app",
 ]
 # Application definition
 INSTALLED_APPS = [
