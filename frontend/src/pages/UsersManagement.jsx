@@ -2,22 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import api from '../services/api';
+import { useToast } from '../components/Toaster';
 import {
     PlusCircleIcon,
     PencilIcon,
     TrashIcon,
     XCircleIcon,
     SearchIcon,
+    EyeIcon,
+    EyeOffIcon,
 } from '@heroicons/react/outline';
 
 const UsersManagement = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [users, setUsers] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showPassword2, setShowPassword2] = useState(false);
 
     const [formData, setFormData] = useState({
         username: '',
@@ -25,7 +31,7 @@ const UsersManagement = () => {
         password2: '',
         phone_number: '',
         email: '',
-        role: 'agent',
+        role: 'client',
         is_client_user: false,
         is_active: true,
         company_id: '',
@@ -45,7 +51,7 @@ const UsersManagement = () => {
             setCompanies(companiesRes.data.results || companiesRes.data || []);
         } catch (error) {
             console.error('Error fetching data:', error);
-            alert('Failed to fetch data');
+            showToast('Failed to fetch users data', 'error');
         } finally {
             setLoading(false);
         }
@@ -59,7 +65,12 @@ const UsersManagement = () => {
     const handleAddUser = async (e) => {
         e.preventDefault();
         if (formData.password !== formData.password2) {
-            alert('Passwords do not match!');
+            showToast('Passwords do not match!', 'error');
+            return;
+        }
+
+        if (formData.password.length < 6) {
+            showToast('Password must be at least 6 characters long', 'error');
             return;
         }
 
@@ -75,13 +86,14 @@ const UsersManagement = () => {
             };
 
             await api.post('/auth/register/', data);
-            alert('User added successfully!');
+            showToast('User added successfully!', 'success');
             setShowAddModal(false);
             resetForm();
             fetchData();
         } catch (error) {
             console.error('Error adding user:', error);
-            alert('Failed to add user. Please try again.');
+            const errorMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to add user. Please try again.';
+            showToast(errorMsg, 'error');
         }
     };
 
@@ -99,17 +111,22 @@ const UsersManagement = () => {
             };
 
             if (formData.password) {
+                if (formData.password.length < 6) {
+                    showToast('Password must be at least 6 characters long', 'error');
+                    return;
+                }
                 data.password = formData.password;
             }
 
             await api.put(`/users/${editingUser.id}/`, data);
-            alert('User updated successfully!');
+            showToast('User updated successfully!', 'success');
             setEditingUser(null);
             resetForm();
             fetchData();
         } catch (error) {
             console.error('Error updating user:', error);
-            alert('Failed to update user. Please try again.');
+            const errorMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to update user. Please try again.';
+            showToast(errorMsg, 'error');
         }
     };
 
@@ -117,11 +134,11 @@ const UsersManagement = () => {
         if (window.confirm('Are you sure you want to delete this user?')) {
             try {
                 await api.delete(`/users/${userId}/`);
-                alert('User deleted successfully!');
+                showToast('User deleted successfully!', 'success');
                 fetchData();
             } catch (error) {
                 console.error('Error deleting user:', error);
-                alert('Failed to delete user. Please try again.');
+                showToast('Failed to delete user. Please try again.', 'error');
             }
         }
     };
@@ -133,11 +150,13 @@ const UsersManagement = () => {
             password2: '',
             phone_number: '',
             email: '',
-            role: 'agent',
+            role: 'client',
             is_client_user: false,
             is_active: true,
             company_id: '',
         });
+        setShowPassword(false);
+        setShowPassword2(false);
     };
 
     const openEditModal = (user) => {
@@ -148,7 +167,7 @@ const UsersManagement = () => {
             password2: '',
             phone_number: user.phone_number || '',
             email: user.email || '',
-            role: user.role || 'agent',
+            role: user.role || 'client',
             is_client_user: user.is_client_user || false,
             is_active: user.is_active !== undefined ? user.is_active : true,
             company_id: user.company?.id || '',
@@ -240,8 +259,8 @@ const UsersManagement = () => {
                                         <td className="px-4 py-3">{user.email || '-'}</td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                                                    user.role === 'client' ? 'bg-blue-100 text-blue-800' :
-                                                        'bg-gray-100 text-gray-800'
+                                                user.role === 'client' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {user.role}
                                             </span>
@@ -341,10 +360,8 @@ const UsersManagement = () => {
                                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                             className="input-field"
                                         >
-                                            <option value="agent">Agent</option>
                                             <option value="admin">Admin</option>
                                             <option value="client">Client</option>
-                                            <option value="support">Support</option>
                                         </select>
                                     </div>
                                     <div>
@@ -375,38 +392,70 @@ const UsersManagement = () => {
                                     </div>
                                     {!editingUser && (
                                         <>
-                                            <div>
+                                            <div className="relative">
                                                 <label className="label-text">Password *</label>
-                                                <input
-                                                    type="password"
-                                                    value={formData.password}
-                                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                    className="input-field"
-                                                    required={!editingUser}
-                                                />
+                                                <div className="relative">
+                                                    <input
+                                                        type={showPassword ? 'text' : 'password'}
+                                                        value={formData.password}
+                                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                        className="input-field pr-10"
+                                                        required={!editingUser}
+                                                        minLength={6}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                                    >
+                                                        {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
                                             </div>
-                                            <div>
+                                            <div className="relative">
                                                 <label className="label-text">Confirm Password *</label>
-                                                <input
-                                                    type="password"
-                                                    value={formData.password2}
-                                                    onChange={(e) => setFormData({ ...formData, password2: e.target.value })}
-                                                    className="input-field"
-                                                    required={!editingUser}
-                                                />
+                                                <div className="relative">
+                                                    <input
+                                                        type={showPassword2 ? 'text' : 'password'}
+                                                        value={formData.password2}
+                                                        onChange={(e) => setFormData({ ...formData, password2: e.target.value })}
+                                                        className="input-field pr-10"
+                                                        required={!editingUser}
+                                                        minLength={6}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword2(!showPassword2)}
+                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                                    >
+                                                        {showPassword2 ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </>
                                     )}
                                     {editingUser && (
-                                        <div>
+                                        <div className="relative">
                                             <label className="label-text">New Password (optional)</label>
-                                            <input
-                                                type="password"
-                                                value={formData.password}
-                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                className="input-field"
-                                                placeholder="Leave blank to keep current"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    value={formData.password}
+                                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                    className="input-field pr-10"
+                                                    placeholder="Leave blank to keep current"
+                                                    minLength={6}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                                >
+                                                    {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters if changed</p>
                                         </div>
                                     )}
                                     <div className="md:col-span-2">

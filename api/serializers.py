@@ -98,7 +98,6 @@ class UserSerializer(serializers.ModelSerializer):
 class UserCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating users"""
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, required=True)
     company_id = serializers.PrimaryKeyRelatedField(
         queryset=Company.objects.all(),
         write_only=True,
@@ -109,18 +108,13 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'username', 'password', 'password2', 'phone_number',
+            'username', 'password', 'phone_number',
             'email', 'role', 'first_name', 'last_name',
             'is_client_user', 'company_id'
         ]
     
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        return attrs
-    
     def create(self, validated_data):
-        validated_data.pop('password2')
+        validated_data.pop('password2',None)
         company = validated_data.pop('company_id', None)
         password = validated_data.pop('password')
         

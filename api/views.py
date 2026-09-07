@@ -172,6 +172,7 @@ def register_user(request):
             'message': 'User created successfully',
             'user': UserSerializer(user).data
         }, status=status.HTTP_201_CREATED)
+    print(serializer.errors)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -382,8 +383,8 @@ class PersonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # If user is a client user, only show persons from their company
-        if user.is_client_user and user.company:
-            queryset = queryset.filter(company=user.company)
+        # if user.is_client_user and user.company:
+        #     queryset = queryset.filter(company=user.company)
         
         # Search filter - single search box for multiple fields
         search = self.request.query_params.get('search')
