@@ -223,6 +223,7 @@ class LendingContractSerializer(serializers.ModelSerializer):
             'status', 'status_display',
             'lodge_date', 'instalment_amount',
             'start_date',
+            'agreement_number',
             'balance_outstanding', 'is_overdue', 'days_overdue',
             'created_at', 'updated_at', 'settled_at',
             'company', 'company_name'

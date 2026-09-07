@@ -195,6 +195,10 @@ class Person(models.Model):
             models.Index(fields=['phone_number', 'user_mode']),
             models.Index(fields=['national_id']),
         ]
+    def save(self, *args, **kwargs):
+        if self.verification_status == 'verified' and not self.is_verified:
+            self.is_verified = True
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.full_name or 'Unknown'} - {self.phone_number}"

@@ -9,6 +9,8 @@ import CreditReport from './pages/CreditReport';
 import ActiveCredit from './pages/ActiveCredit';
 import AddSingle from './pages/AddSingle';
 import UsersManagement from './pages/UsersManagement';
+import PersonManagement from './pages/PersonManagement';
+import CompanyManagement from './pages/CompanyManagement';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -60,6 +62,18 @@ function App() {
           <Route path="/admin/users" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <UsersManagement />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/persons" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <PersonManagement />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/companies" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <CompanyManagement />
             </ProtectedRoute>
           } />
 

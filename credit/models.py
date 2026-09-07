@@ -120,7 +120,7 @@ class LendingContract(models.Model):
     updated_at = models.DateTimeField(auto_now=True) 
     lodge_date = models.DateField(null=True, blank=True, help_text="Date the loan was put in the system")
     start_date = models.DateField(null=True, blank=True, help_text="Date the loan starts")
-    
+    agreement_number = models.CharField(max_length=50, null=True, blank=True, help_text="Unique agreement number for the contract")
     
     class Meta:
         indexes = [
@@ -137,6 +137,23 @@ class LendingContract(models.Model):
         self.status = 'settled'
         self.settled_at = timezone.now()
         self.save()
+    
+    def save(self, *args, **kwargs):
+        """Override save to set start_date if not provided"""
+        if not self.start_date:
+            self.start_date = timezone.now().date()
+        if not self.lodge_date:
+            self.lodge_date = timezone.now().date()
+        if not self.agreement_number:
+            # Generate a unique agreement number based on timestamp and borrower ID
+            timestamp = timezone.now().strftime('%H%M')
+            self.agreement_number = f"AG-{self.borrower.id}{timestamp}"
+            if LendingContract.objects.filter(agreement_number=self.agreement_number).exists():
+                # If the generated agreement number already exists, append a random suffix
+                import random
+                suffix = random.randint(1000, 9999)
+                self.agreement_number = f"AG-{self.borrower.id}{timestamp}{suffix}"
+        super().save(*args, **kwargs)
 
 class CreditCheckAudit(models.Model):
     """Audit log for all credit checks"""

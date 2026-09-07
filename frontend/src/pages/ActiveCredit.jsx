@@ -205,7 +205,7 @@ const ActiveCredit = () => {
                                             <td className="px-4 py-3 text-sm">
                                                 {contract.lodge_date ? new Date(contract.lodge_date).toLocaleDateString() : '-'}
                                             </td>
-                                            <td className="px-4 py-3 text-sm font-mono">#{contract.id}</td>
+                                            <td className="px-4 py-3 text-sm font-mono">#{contract.agreement_number}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <div>
                                                     <p className="font-medium">{contract.lender_name || 'Unknown'}</p>
@@ -273,7 +273,7 @@ const ActiveCredit = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-sm text-gray-500">Agreement No.</p>
-                                    <p className="font-medium">#{selectedContract.id}</p>
+                                    <p className="font-medium">#{selectedContract.agreement_number}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-500">Status</p>
