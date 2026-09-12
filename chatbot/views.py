@@ -1,17 +1,23 @@
-from rest_framework.decorators import api_view
+
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from chatbot.handlers import MessageHandler
 import json
 import logging
 from django.conf import settings
 import re
-
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+)
+from rest_framework.permissions import AllowAny
 logger = logging.getLogger(__name__)
 
 @csrf_exempt
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def whatsapp_webhook(request):
     """Webhook endpoint for WhatsApp messages - FULL MEDIA SUPPORT"""
     try:
@@ -223,8 +229,6 @@ def whatsapp_webhook(request):
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}", exc_info=True)
         return Response({'status': 'error', 'message': str(e)}, status=500)
-    
-@api_view(['GET'])
 def health_check(request):
     """Health check endpoint"""
     return Response({'status': 'healthy'}, status=200)
