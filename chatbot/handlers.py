@@ -1513,8 +1513,9 @@ class MessageHandler:
         """Handle lending money flow"""
         current_lending_contract_id = person.get_session_key('current_lending_contract_id')
         contract = LendingContract.objects.filter(id=current_lending_contract_id).first()
-        borrower_id = person.get_session_key('lending_borrower_id')
-        borrower = Person.objects.get(id=borrower_id)
+        borrower_id = person.get_session_key('borrower_national_id')
+        
+        borrower = Person.objects.filter(national_id=borrower_id).first()
         subject_name = getattr(borrower, 'full_name', 'The borrower')
         subject_national_id = getattr(borrower, 'national_id', 'N/A')
         message_text = message_text.lower().strip()
