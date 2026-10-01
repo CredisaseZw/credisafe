@@ -221,8 +221,8 @@ class MessageHandler:
                     ]
             self.whatsapp.send_interactive_buttons(checker.phone_number, response, buttons)
             # self.whatsapp.send_message(checker.phone_number, response)
-            checker.user_status = 'offer_lending'
-            checker.user_mode='credit_check'
+            # checker.user_status = 'offer_lending'
+            checker.user_mode='lend_money'
             checker.save()
             return True
         else:
@@ -1515,6 +1515,8 @@ class MessageHandler:
         contract = LendingContract.objects.filter(id=current_lending_contract_id).first()
         borrower_id = person.get_session_key('lending_borrower_id')
         borrower = Person.objects.get(id=borrower_id)
+        subject_name = getattr(borrower, 'full_name', 'The borrower')
+        subject_national_id = getattr(borrower, 'national_id', 'N/A')
         message_text = message_text.lower().strip()
         
         if person.user_status == 'enter_credit_currency':
@@ -1691,6 +1693,26 @@ class MessageHandler:
                 self.show_main_menu(person)
             elif message_text == "3":
                 return self.show_main_menu(person)
+        
+        if message_text.lower() in ["yes", "yeah", "yep", "sure"]:
+            response = f"Which currency is credit to {subject_name} - {subject_national_id} ?"
+            buttons = [
+                        {'id': 'usd', 'title': 'USD'},
+                        {'id': 'rand', 'title': 'Rand'},
+                        {'id': 'zwl', 'title': 'ZWL'}
+                    ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, response, buttons)
+            person.user_mode = 'lend_money'
+            person.user_status = 'enter_credit_currency'
+            person.save()
+        elif message_text.lower() in ["no", "nah", "nope"]:
+            self.whatsapp.send_message(person.phone_number, response)
+            return self.show_main_menu(person=person, welcome_message="Lending process cancelled. Welcome back to CrediSafe.")
+        
+        else:
+            response = "❌ Invalid response. Please type 'Yes' to proceed or 'No' to cancel."
+            self.whatsapp.send_message(person.phone_number, response)
+        
         return True
     
     def handle_track_lended(self, person, message_text):
