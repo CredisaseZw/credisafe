@@ -1317,10 +1317,7 @@ class MessageHandler:
         """Handle new borrower not found in API"""
         borrower_id = person.session_data.get('borrower_national_id',None)
 
-        person = Person.objects.filter(
-            national_id=borrower_id,
-        ).first()
-        full_name = getattr(borrower_ob, 'full_name', 'Person')
+        full_name = getattr(person, 'full_name', 'Person')
         
         if person.user_status == 'borrower_full_name':
             full_name = message_text.strip()
