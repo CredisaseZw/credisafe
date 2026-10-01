@@ -135,7 +135,7 @@ class MessageHandler:
             return self.handle_accounting(person, message_text)
         elif person.user_mode == 'receipting':
             return self.handle_receipting(person, message_text)
-        elif person.user_mode == 'statements':
+        elif person.user_mode == 'statements' or message_text.lower() in ["statements", "statement"]:
             return self.handle_statements(person, message_text)
         
         elif person.user_mode == 'track_lended':
@@ -418,8 +418,160 @@ class MessageHandler:
 
         return self.whatsapp.send_message(person.phone_number, receipt_menu)
     
-    def handle_statements(self,person,message_text):
-        return self.whatsapp.send_message(person.phone_number, "This feature is in development")
+    def handle_statements(self, person, message_text):
+        """
+        Generate and send a WhatsApp statement for a person.
+
+        Shows:
+        - Contracts where the person is the borrower
+        - Contracts where the person is the lender
+        - Amounts borrowed/lent
+        - Confirmed repayments
+        - Outstanding balances
+        """
+        from decimal import Decimal
+        from django.db.models import Sum, Q
+        from django.utils import timezone
+
+        contracts = (
+            LendingContract.objects
+            .filter(
+                Q(lender=person) | Q(borrower=person)
+            )
+            .select_related("lender", "borrower")
+            .prefetch_related("receipts")
+            .order_by("-created_at")
+        )
+
+        if not contracts.exists():
+            message = (
+                "📄 *YOUR CREDIT STATEMENT*\n\n"
+                f"Hello {person.full_name} 👋\n\n"
+                "You currently have no lending or borrowing records on the system."
+            )
+
+            return self.whatsapp.send_message(
+                person.phone_number,
+                message
+            )
+
+        # Totals
+        total_borrowed = Decimal("0")
+        total_lent = Decimal("0")
+        total_repaid = Decimal("0")
+        total_outstanding = Decimal("0")
+
+        borrowed_count = 0
+        lent_count = 0
+
+        statement_lines = []
+
+        for contract in contracts:
+            receipts = contract.receipts.filter(confirmed=True)
+
+            repaid = receipts.aggregate(
+                total=Sum("amount")
+            )["total"] or Decimal("0")
+
+            outstanding = max(
+                contract.amount - repaid,
+                Decimal("0")
+            )
+
+            is_borrower = contract.borrower_id == person.id
+            is_lender = contract.lender_id == person.id
+
+            if is_borrower:
+                total_borrowed += contract.amount
+                borrowed_count += 1
+                total_repaid += repaid
+                total_outstanding += outstanding
+
+                role = "📥 Borrowed"
+                other_person = contract.lender.full_name
+
+            elif is_lender:
+                total_lent += contract.amount
+                lent_count += 1
+                total_repaid += repaid
+                total_outstanding += outstanding
+
+                role = "📤 Lent"
+                other_person = contract.borrower.full_name
+
+            else:
+                continue
+
+            currency = contract.get_currency_display()
+
+            status_map = {
+                "active": "🟢 Active",
+                "settled": "✅ Settled",
+                "defaulted": "🔴 Defaulted",
+                "disputed": "⚠️ Disputed",
+                "cancelled": "❌ Cancelled",
+                "rejected": "🚫 Rejected",
+                "inactive": "⚪ Inactive",
+            }
+
+            status = status_map.get(
+                contract.status,
+                contract.status.title()
+            )
+
+            agreement = contract.agreement_number or "N/A"
+
+            statement_lines.append(
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"*{role}*\n"
+                f"👤 {other_person}\n"
+                f"📄 Agreement: `{agreement}`\n"
+                f"💰 Amount: {currency} {contract.amount:,.2f}\n"
+                f"💵 Repaid: {currency} {repaid:,.2f}\n"
+                f"📌 Outstanding: {currency} {outstanding:,.2f}\n"
+                f"📅 Due: {contract.due_date.strftime('%d %b %Y') if contract.due_date else 'Not specified'}\n"
+                f"📊 Status: {status}"
+            )
+
+        # Header
+        message = (
+            f"📄 *YOUR CREDIT STATEMENT*\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"Hello {person.full_name} 👋\n"
+            f"Here is your current lending statement.\n\n"
+        )
+
+        # Summary
+        message += (
+            "📊 *SUMMARY*\n"
+            f"📥 Total borrowed: {total_borrowed:,.2f}\n"
+            f"📤 Total lent: {total_lent:,.2f}\n"
+            f"💵 Total repayments: {total_repaid:,.2f}\n"
+            f"💳 Total outstanding: {total_outstanding:,.2f}\n\n"
+        )
+
+        message += (
+            f"📥 Borrowing agreements: {borrowed_count}\n"
+            f"📤 Lending agreements: {lent_count}\n\n"
+        )
+
+        # Individual contracts
+        message += "📋 *AGREEMENT DETAILS*\n"
+        message += "\n\n".join(statement_lines)
+
+        # Footer
+        message += (
+            "\n\n━━━━━━━━━━━━━━━━━━\n"
+            f"🕐 Statement generated: "
+            f"{timezone.now().strftime('%d %b %Y %H:%M')}\n\n"
+            "If you believe any information is incorrect, "
+            "please contact support."
+        )
+
+        return self.whatsapp.send_message(
+            person.phone_number,
+            message
+        )
     
     def handle_accounting(self, person, message_text):
         if message_text.lower() == "receipting":
@@ -929,31 +1081,30 @@ class MessageHandler:
             
             # Fetch data from API
             try:
-                api_data = fetch_individual(nid)
                     # Person exists in API
-                if borrower_ob:
-                    if api_data:
-                        self.handle_existing_borrower(person, api_data, nid, borrower_ob)
-                    if not borrower_ob.is_verified and borrower_ob.address:
-                        response = f"This person is not yet verified, wait for verification updates\nRegards,\nCrediSafe"
-                        self.whatsapp.send_message(person.phone_number, response)
-                        return True
-                    if person.verification_status == 'rejected':
-                        response = f"This person rejected using CrediSafe services."
-                        self.whatsapp.send_message(person.phone_number, response)
-                        return True
-                    if person.get_session_key('direct_lending'):
-                        return self.initiate_credit_check(person, borrower_ob,require_otp=False)
-                    if not borrower_ob.address:
-                        person.user_mode="borrower_signup"
-                        person.user_status="borrower_address"
-                        return self.handle_new_borrower(person, nid)
-                    return self.initiate_credit_check(person, borrower_ob,require_otp=require_otp)
-                        
                 if not borrower_ob:
                     # Person not found in API or DB - create new record
                     return self.handle_new_borrower(person, nid)
                     
+                api_data = fetch_individual(nid)
+                if api_data:
+                    self.handle_existing_borrower(person, api_data, nid, borrower_ob)
+                if not borrower_ob.is_verified and borrower_ob.address:
+                    response = f"This person is not yet verified, wait for verification updates\nRegards,\nCrediSafe"
+                    self.whatsapp.send_message(person.phone_number, response)
+                    return True
+                if person.verification_status == 'rejected':
+                    response = f"This person rejected using CrediSafe services."
+                    self.whatsapp.send_message(person.phone_number, response)
+                    return True
+                if person.get_session_key('direct_lending'):
+                    return self.initiate_credit_check(person, borrower_ob,require_otp=False)
+                if not borrower_ob.address:
+                    person.user_mode="borrower_signup"
+                    person.user_status="borrower_address"
+                    return self.handle_new_borrower(person, nid)
+                return self.initiate_credit_check(person, borrower_ob,require_otp=require_otp)
+                        
             except Exception as e:
                 logger.error(f"API fetch error: {str(e)}")
                 # If API fails but person exists in DB, use DB data
