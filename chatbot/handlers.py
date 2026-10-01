@@ -1316,7 +1316,9 @@ class MessageHandler:
     def handle_new_borrower(self, person, message_text=''):
         """Handle new borrower not found in API"""
         borrower_id = person.session_data.get('borrower_national_id',None)
-
+        borrower_ob = Person.objects.filter(
+                            national_id=borrower_id,
+                        ).first()
         full_name = getattr(person, 'full_name', 'Person')
         
         if person.user_status == 'borrower_full_name':
@@ -1345,9 +1347,7 @@ class MessageHandler:
                 response = "Invalid address format. Please use the format;\n12 Grade close, Mukumba, Marondera, Zimbabwe"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
-            borrower_ob = Person.objects.filter(
-                    national_id=borrower_id,
-                ).first()
+
             if borrower_ob:
                 borrower_ob.address = message_text.strip()
                 borrower_ob.save()
