@@ -1663,7 +1663,7 @@ class MessageHandler:
             return True
         
         elif person.user_status == "confirm_credit_details":
-            if message_text == "1":
+            if message_text.lower() in ["1", "yes", "yep", "sure"]:
                 readable_date = contract.due_date.strftime("%d %B %Y")
                 otp = self.generate_otp()
                 contract.otp_code = otp
@@ -1686,13 +1686,13 @@ class MessageHandler:
                 person.set_session_data('direct_lending',False)
                 person.save()
                 return True
-            elif message_text == "2":
+            elif message_text.lower() in ["2", "no", "nah", "nope"]:
                 contract.status = "cancelled"
                 contract.save()
                 person.user_mode = "welcome"
                 person.save()
                 self.show_main_menu(person)
-            elif message_text == "3":
+            elif message_text.lower() in ["3", "exit"]:
                 return self.show_main_menu(person)
         
         if message_text.lower() in ["yes", "yeah", "yep", "sure"]:
