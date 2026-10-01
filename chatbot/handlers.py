@@ -1075,9 +1075,8 @@ class MessageHandler:
             # Check if person exists in DB first
             borrower_ob = Person.objects.filter(national_id=nid).first()
 
-            if person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists():
-                if borrower_ob and borrower_ob.uploader == person and borrower_ob.created_at.date() == timezone.now().date():
-                    require_otp=False
+            if person.messages.filter(content__iexact="give credit",timestamp__date=timezone.now().date()).exists() and (borrower_ob and borrower_ob.uploader == person and borrower_ob.created_at.date() == timezone.now().date()):
+                require_otp=False
             
             # Fetch data from API
             try:
@@ -1106,7 +1105,7 @@ class MessageHandler:
                 return self.initiate_credit_check(person, borrower_ob,require_otp=require_otp)
                         
             except Exception as e:
-                logger.error(f"API fetch error: {str(e)}")
+                print(f"API fetch error: {str(e)}")
                 # If API fails but person exists in DB, use DB data
                 if borrower_ob:
                     print("API failed, but person exists in DB. Using existing data.")
