@@ -1836,7 +1836,7 @@ class MessageHandler:
         person.save()
 
         user_name = person.full_name or "there"
-
+        person_loans = LendingContract.objects.filter(borrower=person, status='active')
         if not welcome_message:
             welcome_message = f"Welcome {user_name} \n\n"
 
@@ -1857,7 +1857,7 @@ class MessageHandler:
                 payment_status = "🟡"
                 code = "Medium Risk"
 
-            elif not getattr(person, 'loans_taken', None):
+            elif person_loans.count() == 0:
                 code = "No Transaction History"
                 payment_status = "⚪"
 
@@ -2010,7 +2010,6 @@ class MessageHandler:
             )
 
             if not credit_taken_by_currency:
-                payment_status = "`-`"
 
                 credit_history = person.credit_histories.first()
 
