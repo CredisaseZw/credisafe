@@ -394,7 +394,7 @@ class MessageHandler:
             return
 
         # Otherwise send the menu
-        receipt_menu = "Receipt\n"
+        receipt_menu = "Please select the credit number to receipt from the list below\n"
 
         credits = list(credits_given)
 
@@ -670,7 +670,7 @@ class MessageHandler:
             contract.status = "active"
             contract.save(update_fields=["status"])
             person.set_session_data("pending_contract_to_confirm_id",None)
-            message_to_subject = "Credit has been accepted."
+            message_to_subject = f"You have confirmed taking credit from {contract.lender.full_name}"
             self.whatsapp.send_message(person.phone_number, message_to_subject)
             readable_date = contract.due_date.strftime("%d %B %Y")
             person.user_mode = "welcome"
@@ -878,12 +878,12 @@ class MessageHandler:
                 person.phone_number,
                 "image",
                 "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
-                "Please upload a clear image of yourself holding your National ID/Passport like this."
+                "Please send a picture of the subject holding their ID card like this"
             )
             if media_sent is None:
                 self.whatsapp.send_message(
                     person.phone_number,
-                    "Please send a selfie visibly holding your National ID/Passport."
+                    "Please send a picture of the subject holding their ID card like above"
                 )
             return True
         
@@ -1172,7 +1172,7 @@ class MessageHandler:
                     return True
                     
                 else:
-                    response = "❌ Invalid OTP. Please try again \n\n> reply exit to return to main menu"
+                    response = "❌ Invalid PIN. Please try again \n\n> reply exit to return to main menu"
                     self.whatsapp.send_message(person.phone_number, response)
                     return False
                     
@@ -1215,7 +1215,7 @@ class MessageHandler:
         person.save()
         
         
-        return self.whatsapp.send_message(person.phone_number, "Please enter the National ID of the person you want to give credit to eg 12345678A90 \n\n> reply exit to return to main menu")
+        return self.whatsapp.send_message(person.phone_number, "Please enter ID Number of individual to check here in the format 12345678A90” \n\n> reply exit to return to main menu")
     
     def handle_existing_borrower(self, person, api_data, national_id, borrower=None):
         """Handle borrower that exists in API"""
@@ -1319,7 +1319,7 @@ class MessageHandler:
         borrower_ob = Person.objects.filter(
                             national_id=borrower_id,
                         ).first()
-        full_name = getattr(person, 'full_name', 'Person')
+        full_name = getattr(borrower_ob, 'full_name', 'Person')
         
         if person.user_status == 'borrower_full_name':
             full_name = message_text.strip()
@@ -1400,10 +1400,10 @@ class MessageHandler:
                     person.phone_number,
                     "image",
                     "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
-                    "Information saved successfully, please send a selfie of the subject holding their ID card"
+                    "Information saved successfully, please send a picture of the subject holding their ID card like this."
                 )
                 if media_sent is None:
-                    message = "Information saved successfully, please send a selfie of the subject holding their ID card"
+                    message = "Information saved successfully, please send a selfie of the subject holding their ID card."
                     self.whatsapp.send_message(person.phone_number, message)
                 try:
                     from users.services.identity_service import (
@@ -1449,7 +1449,7 @@ class MessageHandler:
         person.user_mode = 'borrower_signup'
         person.save()
         
-        response = "Sorry, that ID number was not found in database. Would you like to add the individual?\n\n"
+        response = "That ID number was not found as a user in the database.\nWould you like to add the individual?\n"
         buttons = [
             {'id': 'yes', 'title': 'Yes'},
             {'id': 'no', 'title': 'No'},
@@ -1778,87 +1778,292 @@ class MessageHandler:
         return self.show_main_menu(person)
 
     
-    def show_main_menu(self, person,welcome_message="",title_one="Payment Status Check",title_two="Give Credit",title_three="Accounting"):
+    def show_main_menu(
+        self,
+        person,
+        welcome_message="",
+        title_one="Check Credit Status",
+        title_two="Give Credit",
+        title_three="Accounting"
+    ):
+
+        from django.db.models import (
+            Sum,
+            OuterRef,
+            Subquery,
+            DecimalField,
+            F,
+            Value,
+        )
+        from django.db.models.functions import Coalesce
+
         """Display main menu options"""
+
         # Reset mode to offer_service
         if not person.is_verified:
-            self.whatsapp.send_message(person.phone_number, "Finish signup to use the CrediSafe services.")
+            self.whatsapp.send_message(
+                person.phone_number,
+                "Finish signup to use the CrediSafe services."
+            )
             return False
-        person_last_message = WhatsAppMessage.objects.filter(person=person).order_by('-timestamp').first()
+
+        person_last_message = (
+            WhatsAppMessage.objects
+            .filter(person=person)
+            .order_by('-timestamp')
+            .first()
+        )
+
         one_hour_ago = timezone.now() - timedelta(hours=1)
-        if person_last_message and person_last_message.timestamp <= one_hour_ago:
-            self.whatsapp.send_message(person.phone_number, f"Hi {person.full_name}. Welcome back to CrediSafe. Enter your pin to continue.")
-            person.user_mode='login'
+
+        if (
+            person_last_message
+            and person_last_message.timestamp <= one_hour_ago
+        ):
+            self.whatsapp.send_message(
+                person.phone_number,
+                f"Hi {person.full_name}. Welcome back to CrediSafe. "
+                f"Enter your pin to continue."
+            )
+
+            person.user_mode = 'login'
             person.save(update_fields=['user_mode'])
+
             return True
+
         person.user_mode = 'welcome'
-        person.user_status='welcome'
+        person.user_status = 'welcome'
         person.save()
+
         user_name = person.full_name or "there"
+
         if not welcome_message:
             welcome_message = f"Welcome {user_name} \n\n"
-            credit_score = person.credit_score or 0
-            if credit_score >= 800:
-                payment_status="🔴"
-                code = "High Risk-Upper"
-            elif credit_score >= 600:
-                payment_status="🟠"
-                code="High Risk-Lower"
-            elif credit_score >= 300:
-                payment_status="🟡"
-                code="Medium Risk"
-            else:
-                code="Low Risk"
-                payment_status="🟢"
-                
 
-            credit_taken = (
-                LendingContract.objects.filter(
+            # ---------------------------------------------------------
+            # CREDIT SCORE / PAYMENT STATUS
+            # ---------------------------------------------------------
+            credit_score = person.credit_score or 0
+
+            if credit_score >= 800:
+                payment_status = "🔴"
+                code = "High Risk-Upper"
+
+            elif credit_score >= 600:
+                payment_status = "🟠"
+                code = "High Risk-Lower"
+
+            elif credit_score >= 300:
+                payment_status = "🟡"
+                code = "Medium Risk"
+
+            elif not getattr(person, 'loans_taken', None):
+                code = "No Transaction History"
+                payment_status = "⚪"
+
+            else:
+                code = "Low Risk"
+                payment_status = "🟢"
+
+            # ---------------------------------------------------------
+            # CURRENCY LABELS
+            # ---------------------------------------------------------
+            currency_labels = {
+                'usd': 'US$',
+                'rand': 'R',
+                'zwl': 'ZWL$',
+            }
+
+            # ---------------------------------------------------------
+            # CREDIT TAKEN
+            #
+            # Group by currency so we NEVER add USD + ZAR + ZWL
+            # together.
+            # ---------------------------------------------------------
+            credit_taken_by_currency = (
+                LendingContract.objects
+                .filter(
                     borrower=person,
                     status='active'
-                ).aggregate(total=Sum('amount'))['total']
-                or Decimal('0.00')
+                )
+                .values('currency')
+                .annotate(
+                    total=Sum('amount')
+                )
+                .order_by('currency')
             )
 
-            credit_given = (
-                LendingContract.objects.filter(
+            # ---------------------------------------------------------
+            # CONFIRMED RECEIPTS
+            #
+            # Find confirmed repayments belonging to each contract.
+            # ---------------------------------------------------------
+            confirmed_receipts = (
+                Receipt.objects
+                .filter(
+                    lending_contract=OuterRef('pk'),
+                    confirmed=True
+                )
+                .values('lending_contract')
+                .annotate(
+                    total=Sum('amount')
+                )
+                .values('total')
+            )
+
+            # ---------------------------------------------------------
+            # OWING IN ARREARS
+            #
+            # For every active loan:
+            #
+            # outstanding = loan amount - confirmed repayments
+            #
+            # Then group the outstanding amounts by the loan's currency.
+            # ---------------------------------------------------------
+            owing_by_currency = (
+                LendingContract.objects
+                .filter(
+                    borrower=person,
+                    status='active'
+                )
+                .annotate(
+                    total_paid=Coalesce(
+                        Subquery(
+                            confirmed_receipts,
+                            output_field=DecimalField(
+                                max_digits=12,
+                                decimal_places=2
+                            )
+                        ),
+                        Value(
+                            Decimal('0.00'),
+                            output_field=DecimalField(
+                                max_digits=12,
+                                decimal_places=2
+                            )
+                        )
+                    )
+                )
+                .annotate(
+                    outstanding=F('amount') - F('total_paid')
+                )
+                .values('currency')
+                .annotate(
+                    total=Sum('outstanding')
+                )
+                .order_by('currency')
+            )
+
+            # ---------------------------------------------------------
+            # CREDIT GIVEN
+            # ---------------------------------------------------------
+            credit_given_by_currency = (
+                LendingContract.objects
+                .filter(
                     lender=person,
                     status='active'
-                ).aggregate(total=Sum('amount'))['total']
-                or Decimal('0.00')
+                )
+                .values('currency')
+                .annotate(
+                    total=Sum('amount')
+                )
+                .order_by('currency')
             )
 
-            if credit_taken <=0:
-                payment_status ="`-`"
+            # ---------------------------------------------------------
+            # FORMAT CURRENCY TOTALS
+            # ---------------------------------------------------------
+            def format_currency_totals(currency_totals):
+                if not currency_totals:
+                    return "-"
+
+                lines = []
+
+                for item in currency_totals:
+                    currency = item.get('currency')
+                    total = item.get('total') or Decimal('0.00')
+
+                    currency_label = currency_labels.get(
+                        currency,
+                        str(currency).upper() if currency else ''
+                    )
+
+                    lines.append(
+                        f"{currency_label}{total:,.2f}"
+                    )
+
+                return "\n".join(lines)
+
+            # ---------------------------------------------------------
+            # FORMAT THE THREE FINANCIAL VALUES
+            # ---------------------------------------------------------
+            credit_taken_display = format_currency_totals(
+                credit_taken_by_currency
+            )
+
+            owing_display = format_currency_totals(
+                owing_by_currency
+            )
+
+            credit_given_display = format_currency_totals(
+                credit_given_by_currency
+            )
+
+            if not credit_taken_by_currency:
+                payment_status = "`-`"
+
                 credit_history = person.credit_histories.first()
+
                 if credit_history:
-                    credit_taken = credit_history.total_borrowed
-                    
+                    historical_total = (
+                        credit_history.total_borrowed
+                        or Decimal('0.00')
+                    )
+
+                    credit_taken_display = (
+                        f"{historical_total:,.2f}"
+                    )
+
+            # ---------------------------------------------------------
+            # WELCOME MESSAGE
+            # ---------------------------------------------------------
             welcome_message += (
                 f"Your Payment Status:\n"
                 f"{code} {payment_status}\n\n"
                 f"*Net Status*\n"
-                f"Credit Taken - US${credit_taken:,.2f}\n"
-                f"Credit Given - US${credit_given:,.2f}\n\n"
+                f"Credit Taken\n"
+                f"{credit_taken_display}\n\n"
+                f"Owing In Arrears\n"
+                f"{owing_display}\n\n"
+                f"Credit Given\n"
+                f"{credit_given_display}\n\n"
                 f"Options:\n"
             )
-            
-            menu = f", *{user_name}!* Please choose an option:\n\n"
-            menu += "1️⃣ *Credit Services* - Check credit history and lend\n"
-            menu += "2️⃣ *My Activity* - View your lending history\n"
-            menu += "3️⃣ *Give Credit* - Offer credit to others\n\n"
-            menu += "Reply with the option number 1, 2, or 3."
-        
-        # self.whatsapp.send_message(person.phone_number, menu)
-        
-        # Send as interactive buttons if supported
+
+        # -------------------------------------------------------------
+        # SEND INTERACTIVE BUTTONS
+        # -------------------------------------------------------------
         buttons = [
-            {'id': 'lend_money', 'title': title_one},
-            {'id': 'accounting', 'title': title_two},
-            {'id': 'give_credit', 'title': title_three}
+            {
+                'id': 'lend_money',
+                'title': title_one
+            },
+            {
+                'id': 'accounting',
+                'title': title_two
+            },
+            {
+                'id': 'give_credit',
+                'title': title_three
+            }
         ]
-        self.whatsapp.send_interactive_buttons(person.phone_number, welcome_message, buttons)
-        
+
+        self.whatsapp.send_interactive_buttons(
+            person.phone_number,
+            welcome_message,
+            buttons
+        )
+
         return True
     
     def format_credit_report(self, person, credit_history, is_self_check=""):
@@ -1935,7 +2140,7 @@ class MessageHandler:
             
             if require_otp:
             # Send SMS to checker
-                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, enter your OTP if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
+                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, enter your PIN if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
                 self.whatsapp.send_message(borrower.phone_number, message)
                 borrower.user_mode='accept_status_check'
                 borrower.set_session_data('pending_credit_check_id', credit_check.id)

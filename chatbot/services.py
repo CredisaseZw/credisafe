@@ -11,7 +11,7 @@ def verify_person_service(person):
         person.save(update_fields=['user_mode'])
 
         subject_details = (
-            "Do you accept addition of your details below to CrediSafe;\n\n"
+            "Do you accept addition of your details below to CrediSafe as a user?\n\n"
             f"Name: {person.full_name}\n"
             f"ID Number: {person.national_id}\n"
             f"Address: {person.address}\n"
