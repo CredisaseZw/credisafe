@@ -2027,14 +2027,14 @@ class MessageHandler:
             # WELCOME MESSAGE
             # ---------------------------------------------------------
             welcome_message += (
-                f"Your Payment Status:\n"
+                f"`Your Payment Status`:\n"
                 f"{code} {payment_status}\n\n"
-                f"*Net Status*\n"
-                f"Credit Taken\n"
+                f"`*Net Status*`\n"
+                f"`Credit Taken`\n"
                 f"{credit_taken_display}\n\n"
-                f"Owing In Arrears\n"
+                f"`Owing In Arrears`\n"
                 f"{owing_display}\n\n"
-                f"Credit Given\n"
+                f"`Credit Given`\n"
                 f"{credit_given_display}\n\n"
                 f"Options:\n"
             )
