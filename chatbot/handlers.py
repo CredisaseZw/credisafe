@@ -122,7 +122,7 @@ class MessageHandler:
         elif person.user_mode == 'credit_check' or message_text.lower() =="give credit":
             
             return self.handle_credit_check(person, message_text)
-        elif person.user_mode == 'offer_service' or message_text.lower() in ["payment status check", "check"]:
+        elif person.user_mode == 'offer_service' or message_text.lower() in ["check credit status", "check"]:
             # return self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
             return self.handle_offer_service(person, message_text)
         elif person.user_mode == 'lend_money':
@@ -1463,7 +1463,7 @@ class MessageHandler:
     def handle_offer_service(self, person, message_text):
         """Handle offer service mode"""
         normalized = message_text.lower().strip()
-        if normalized in ['1', 'lend money', 'lend', 'payment status check', 'lend_money']:
+        if normalized in ['1', 'lend money', 'lend', 'check credit status', 'lend_money']:
             person.user_mode = 'credit_check'
             person.user_status = 'borrower_id'
             person.save()
