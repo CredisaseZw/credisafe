@@ -3,6 +3,7 @@ import random
 import string
 from datetime import datetime, timedelta
 from django.utils import timezone
+from payments.services import PaymentService
 from users.models import Person
 from credit.models import CreditCheck, CreditHistory, LendingContract, CreditCheckAudit, Receipt
 from chatbot.whatsapp_client import WhatsAppClient
@@ -12,6 +13,7 @@ from chatbot.validators import validate_name, validate_address
 import time
 from decimal import Decimal
 from django.db.models import Sum
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ class MessageHandler:
         logger.info(f"SMS to {phone_number}: {message}")
         return True
     
-    def handle_incoming_message(self, from_number, message_text,message_id=None, is_quoted=False, direction="incoming"):
+    def handle_incoming_message(self, from_number, message_text,message_id=None,media_url=None, is_quoted=False, direction="incoming"):
         """Main handler for incoming WhatsApp messages"""
         # Save incoming message
         if message_id:
@@ -103,7 +105,10 @@ class MessageHandler:
         
         if person.user_mode == 'login':
             return self.handle_login(person, message_text)
-        
+        elif person.user_mode =="inquiry_payment":
+            return self.handle_report_payment_method(person, message_text)
+        elif person.user_mode =="payment_mode":
+            return self.handle_route_payments(person, message_text)
         elif person.user_mode =="borrower_confirmation":
             return self.handle_borrower_confirmation(person, message_text)
         elif person.user_mode =="accept_status_check":
@@ -118,7 +123,7 @@ class MessageHandler:
             return self.handle_new_borrower(person, message_text)
         
         elif person.user_mode in ["edit_profile", "signup"]:
-            return self.handle_signup(person, message_text)
+            return self.handle_signup(person, message_text,media_url)
         elif person.user_mode == 'credit_check' or message_text.lower() =="give credit":
             
             return self.handle_credit_check(person, message_text)
@@ -151,6 +156,15 @@ class MessageHandler:
         else:
             return self.show_main_menu(person)
     
+    def handle_route_payments(self, person, message_text):
+        """
+        Handle the user's response to the payment method selection.
+        This is called when user_mode is 'payment_mode'.
+        """
+        if person.user_status =="inquiry_payment":
+            return self.handle_report_payment_method(person, message_text)
+        elif person.user_status =='record_upload_payment':
+            ...
     
     def handle_accept_status_check(self, person, message_text):
         #Person object here is the person being checked
@@ -168,17 +182,15 @@ class MessageHandler:
             credit_check.save(update_fields=["status"])
             self.whatsapp.send_message(person.phone_number, f"The credit check request has expired, wait for {checker.full_name} to initiate a new request.")
             return self.whatsapp.send_message(checker.phone_number, f"The credit check request has expired. Please initiate a new request.")
-        if message_text.lower() in ["reject", "no", "cancel", "exit"]:
-            if credit_check:
-                credit_check.status = "rejected"
-                person.user_mode = "welcome"
-                person.save(update_fields=["user_mode"])
-                credit_check.save(update_fields=["status"])
-                message_to_checker = f"{person.full_name} ({person.national_id}) has rejected your payment status check request."
-                self.whatsapp.send_message(credit_check.checker.phone_number, message_to_checker)
-                return self.whatsapp.send_message(person.phone_number, "You have rejected the payment status check request.")
-                # time.sleep(1)
-            # return self.show_main_menu(person)
+        
+        if message_text.lower() in ["reject", "no", "cancel", "exit"] and credit_check:
+            credit_check.status = "rejected"
+            person.user_mode = "welcome"
+            person.save(update_fields=["user_mode"])
+            credit_check.save(update_fields=["status"])
+            message_to_checker = f"{person.full_name} ({person.national_id}) has rejected your payment status check request."
+            self.whatsapp.send_message(credit_check.checker.phone_number, message_to_checker)
+            return self.whatsapp.send_message(person.phone_number, "You have rejected the payment status check request.")
         
         try:
             otp_code = int(message_text.strip())
@@ -189,44 +201,211 @@ class MessageHandler:
             ]
             return self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid PIN. Please type your pincode to use Credisafe.", buttons)
         if int(person.otp_code) == otp_code:
-            message_to_checker = f"{person.full_name} ({person.national_id}) has accepted your payment status check request, waiting for the report to be generated."
+            message_to_checker = (
+                f"{person.full_name} ({person.national_id}) has accepted your "
+                f"payment status check request."
+            )
             self.whatsapp.send_message(checker.phone_number, message_to_checker)
+
             credit_check.status = 'verified'
             credit_check.otp_verified_at = timezone.now()
             credit_check.save()
+
             time.sleep(1)
-            self.whatsapp.send_message(person.phone_number, f"You have accepted the payment status check request from {checker.full_name}.")
-            credit_history = self.get_credit_history(person)
-            credit_check.credit_history_snapshot = credit_history
-            credit_check.status = 'completed'
-            credit_check.checked_at = timezone.now()
-            credit_check.save()
-            
+            self.whatsapp.send_message(
+                person.phone_number,
+                f"You have accepted the payment status check request from {checker.full_name}."
+            )
+
             CreditCheckAudit.objects.create(
                 credit_check=credit_check,
                 action='credit_viewed',
                 details={'method': 'otp_verified'},
                 performed_by_phone=person.phone_number
             )
-            response = self.format_credit_report(person, credit_history)
-            self.whatsapp.send_message(checker.phone_number, response)
-            time.sleep(3)
-            subject_name = person.full_name
-            subject_national_id = person.national_id
-            response = f"Would you like to give credit to {subject_name} - {subject_national_id}?\n\n"
-            buttons = [
-                        {'id': 'lend_money', 'title': 'Yes'},
-                        {'id': 'no', 'title': 'No'},
-                        # {'id': 'settle_debt', 'title': '✅ Settle Debt'}
-                    ]
-            self.whatsapp.send_interactive_buttons(checker.phone_number, response, buttons)
-            # self.whatsapp.send_message(checker.phone_number, response)
-            # checker.user_status = 'offer_lending'
-            checker.user_mode='lend_money'
-            checker.save()
-            return True
+
+            # ---- NEW: branch on the feature flag -------------------------
+            if settings.CREDIT_REPORT_PAYWALL_ENABLED:
+                return self.request_report_payment(credit_check, person)
+            else:
+                return self.deliver_credit_report(credit_check, person)
+            # -------------------------------------------------------------
+
         else:
-            return self.whatsapp.send_message(person.phone_number, "Invalid PIN, please type your correct pincode before the request expires.")
+            return self.whatsapp.send_message(
+                person.phone_number,
+                "Invalid PIN, please type your correct pincode before the request expires."
+            )
+    
+    def deliver_credit_report(self, credit_check, person):
+        """
+        Generate the credit report and send it to the checker.
+        Called either directly (paywall off) or after successful $1 payment.
+        Idempotent-ish: if the report was already delivered, do nothing.
+        """
+        if credit_check.status == 'completed' and credit_check.checked_at:
+            return True   # already delivered
+
+        checker = credit_check.checker
+
+        credit_history = self.get_credit_history(person)
+        credit_check.credit_history_snapshot = credit_history
+        credit_check.status     = 'completed'
+        credit_check.checked_at = timezone.now()
+        credit_check.save()
+
+        response = self.format_credit_report(person, credit_history)
+        self.whatsapp.send_message(checker.phone_number, response)
+        time.sleep(3)
+
+        response = (
+            f"Would you like to give credit to {person.full_name} - "
+            f"{person.national_id}?\n\n"
+        )
+        buttons = [
+            {'id': 'lend_money', 'title': 'Yes'},
+            {'id': 'no', 'title': 'No'},
+        ]
+        self.whatsapp.send_interactive_buttons(checker.phone_number, response, buttons)
+
+        checker.user_mode = 'lend_money'
+        checker.save(update_fields=["user_mode"])
+        return True
+    
+    def handle_report_payment_method(self, person, message_text):
+        """
+        Checker replied to 'choose a payment method'.
+        message_text is the button id, e.g. 'pay_ECOCASH' or 'pay_cancel'.
+        """
+        last_payment_method= person.get_session_key("payment_method",'ecocash')
+        credit_check_id = person.get_session_key('pending_report_credit_check_id')
+        credit_check = CreditCheck.objects.filter(id=credit_check_id).first()
+        if not credit_check:
+            person.user_mode = 'welcome'
+            person.save(update_fields=['user_mode'])
+            return self.whatsapp.send_message(
+                person.phone_number,
+                "No pending report request found. Please start again."
+            )
+
+        text = message_text.strip().lower()
+        if text in ('pay_cancel', 'cancel', 'no', 'exit'):
+            credit_check.status = 'cancelled'
+            credit_check.save(update_fields=['status'])
+            person.user_mode = 'welcome'
+            person.save(update_fields=['user_mode'])
+            return self.whatsapp.send_message(
+                person.phone_number,
+                "You cancelled the report payment. The credit report will not be generated"
+            )
+            
+        payment_methods = ['ecocash', 'innbucks', 'omari']
+        method = text
+        if person.user_status =="payment_method":
+            if not method in payment_methods:
+                buttons = [
+                    {'id': 'pay_ECOCASH',  'title': 'EcoCash'},
+                    {'id': 'pay_INNBUCKS', 'title': 'InnBucks'},
+                    {'id': 'pay_OMARI',    'title': 'Omari'},
+                    {'id': 'pay_cancel',   'title': 'Cancel'},
+                ]
+                return self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Please choose a valid payment method.",
+                    buttons,
+                )
+                
+        if text in payment_methods:
+            person.user_status ="payment_number"
+            person.save(update_fields=['user_status'])
+            person.set_session_data('payment_method', text)
+            return self.whatsapp.send_message(
+                person.phone_number,
+                f"You selected {text}. Please enter your *{text}* phone number to proceed with the payment. eg 077XXXXXX"
+            )
+        if person.user_status =="payment_number":
+            person.user_status ="inquiry_payment"
+            if not len(text) == 10:
+                return self.whatsapp.send_message(
+                    person.phone_number,
+                    "Invalid phone number. Please enter a valid phone number to proceed with the payment. e.g 077XXXXXXX"
+                )
+            last_payment_method = person.get_session_key("payment_method")
+            person.set_session_data(f'{last_payment_method}_number', text)
+            person.save(update_fields=['user_status'])
+
+        # --- Charge the checker ---
+        payment_phone_number = person.get_session_key(f'{last_payment_method}_number', person.phone_number)
+        try:
+            payment = PaymentService.charge(
+                phone_number=payment_phone_number,
+                amount=settings.CREDIT_REPORT_FEE_AMOUNT,
+                currency=settings.CREDIT_REPORT_FEE_CURRENCY,
+                description=f"Credit report fee for viewing {credit_check.subject.full_name} credit history",
+                payment_method=last_payment_method,
+                payer=person,
+                metadata={
+                    'kind': 'credit_report_fee',
+                    'credit_check_id': credit_check.id,
+                },
+            )
+        except Exception as exc:
+            self.whatsapp.send_message(
+                person.phone_number,
+                f"Could not start the payment: {exc}. Please try again or cancel."
+            )
+            return False
+
+        # Link the payment to the credit check for completion routing
+        credit_check.payment_reference = payment.reference
+        credit_check.status = 'payment_processing'
+        credit_check.save(update_fields=['status', 'payment_reference'])
+
+        person.user_mode   = 'welcome'   # reset, we're waiting for the webhook/poller
+        person.user_status = 'welcome'
+        person.save(update_fields=['user_mode', 'user_status'])
+
+        self.whatsapp.send_message(
+            person.phone_number,
+            f"A payment request for {payment.amount} {payment.currency} has been "
+            f"sent to your phone: *{payment_phone_number}*. Please enter your {last_payment_method} PIN to approve."
+        )
+        return True
+    
+    def request_report_payment(self, credit_check, person):
+        """
+        Ask the checker to pick a payment method for the $1 report fee.
+        Sets the checker's user_mode so the next message is routed to
+        handle_report_payment_method.
+        """
+        checker = credit_check.checker
+
+        credit_check.status = 'awaiting_payment'
+        credit_check.save(update_fields=['status'])
+
+        amount   = settings.CREDIT_REPORT_FEE_AMOUNT
+        currency = settings.CREDIT_REPORT_FEE_CURRENCY
+
+        payment_message=(
+            f"To view {person.full_name}'s credit report, a fee of "
+            f"{currency} {amount}  is required.\n\n Please select a payment method below or reply 'cancel' to cancel the request."
+        )
+        buttons = [
+            {'id': 'pay_ECOCASH',    'title': 'EcoCash'},
+            {'id': 'pay_INNBUCKS',   'title': 'InnBucks'},
+            {'id': 'pay_OMARI',      'title': 'Omari'},
+            {'id': 'pay_cancel',     'title': 'Cancel'},
+        ]
+        self.whatsapp.send_interactive_buttons(
+            checker.phone_number,
+            payment_message,
+            buttons,
+        )
+        checker.user_mode   = 'inquiry_payment'
+        checker.user_status = 'payment_method'
+        checker.set_session_data('pending_report_credit_check_id', credit_check.id)
+        checker.save(update_fields=["user_mode", "user_status"])
+        return True
 
     def handle_receipting(self, person, message_text):
         if person.user_status == "receipt_date":
@@ -649,37 +828,218 @@ class MessageHandler:
         contract = LendingContract.objects.filter(id=pending_contract_to_confirm_id).first()
         if not contract:
             return self.whatsapp.send_message(person.phone_number, "An error occurred, error code: 101")
-        
-        if message_text.lower() in ["no", "n","reject"]:
+
+        # --- rejection path (unchanged) ---
+        if message_text.lower() in ["no", "n", "reject"]:
             contract.status = "rejected"
             contract.save(update_fields=["status"])
-            message_to_subject = "Credit has been rejected."
-            self.whatsapp.send_message(person.phone_number, message_to_subject)
-            message_to_creditor = f"{person.full_name} - {person.national_id} rejected your credit of {contract.currency}{contract.amount}.\n\n"
-            self.whatsapp.send_message(contract.lender.phone_number, message_to_creditor)
+            self.whatsapp.send_message(person.phone_number, "Credit has been rejected.")
+            self.whatsapp.send_message(
+                contract.lender.phone_number,
+                f"{person.full_name} - {person.national_id} rejected your credit of "
+                f"{contract.currency}{contract.amount}.\n\n"
+            )
             return True
+
+        # --- OTP parse ---
         try:
             otp = int(message_text)
-        except:
-            return self.whatsapp.send_message(person.phone_number, "Invalid response. Please type a the pin to accept or click 'reject' to reject.")
-        
+        except ValueError:
+            return self.whatsapp.send_message(
+                person.phone_number,
+                "Invalid response. Please type the pin to accept or click 'reject' to reject."
+            )
+
         if not person.otp_code:
             person.otp_code = otp
             person.save(update_fields=["otp_code"])
-        if int(person.otp_code) == otp:
-            contract.status = "active"
-            contract.save(update_fields=["status"])
-            person.set_session_data("pending_contract_to_confirm_id",None)
-            message_to_subject = f"You have confirmed taking credit from {contract.lender.full_name}"
-            self.whatsapp.send_message(person.phone_number, message_to_subject)
-            readable_date = contract.due_date.strftime("%d %B %Y")
-            person.user_mode = "welcome"
-            person.save(update_fields=["user_mode"])
-            message_to_creditor = f"{person.full_name}({person.national_id}) has confirmed taking credit from you of {contract.currency}{contract.amount} for {contract.credit_type} to be repaid on {readable_date}."
-            self.whatsapp.send_message(contract.lender.phone_number, message_to_creditor)
-            return True
-        else:
+
+        if int(person.otp_code) != otp:
             return self.whatsapp.send_message(person.phone_number, "Wrong code. Please try again.")
+
+        # ------------------------------------------------------------------
+        # Borrower accepted. Move the contract out of 'active' and either
+        # activate now or hand off to the lender's payment flow.
+        # ------------------------------------------------------------------
+        contract.status = "awaiting_payment" if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED else "active"
+        contract.save(update_fields=["status"])
+
+        person.set_session_data("pending_contract_to_confirm_id", None)
+        person.user_mode = "welcome"
+        person.save(update_fields=["user_mode"])
+
+        self.whatsapp.send_message(
+            person.phone_number,
+            f"You have accepted the credit from {contract.lender.full_name}. "
+            # + ("The lender has been asked to pay the activation fee."
+            # if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED
+            # else "The contract is now active.")
+        )
+
+        if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED:
+            # Notify the lender to pay; start their payment flow.
+            return self.request_lender_activation_payment(contract)
+        else:
+            # Old behaviour: notify lender that the contract is active.
+            readable_date = contract.due_date.strftime("%d %B %Y") if contract.due_date else "the agreed date"
+            self.whatsapp.send_message(
+                contract.lender.phone_number,
+                f"{person.full_name}({person.national_id}) has confirmed taking credit "
+                f"from you of {contract.currency}{contract.amount} for {contract.credit_type} "
+                f"to be repaid on {readable_date}."
+            )
+            return True
+    def request_lender_activation_payment(self, contract):
+        """
+        Called after the borrower accepts. Sends the lender a message with
+        payment method buttons, sets the lender's session/mode.
+        """
+        lender = contract.lender
+
+        amount   = settings.CREDIT_ACCEPTANCE_FEE_AMOUNT
+        currency = settings.CREDIT_ACCEPTANCE_FEE_CURRENCY
+
+        message_to_send=(
+            lender.phone_number,
+            f"{contract.borrower.full_name} ({contract.borrower.national_id}) "
+            f"has accepted your credit of {contract.currency}{contract.amount}.\n\n"
+            f"To activate the contract, a fee of {currency} {amount} is required. "
+            f"Please select a payment method below or reply 'cancel' to cancel."
+        )
+        buttons = [
+            {'id': 'pay_ECOCASH',  'title': 'EcoCash'},
+            {'id': 'pay_INNBUCKS', 'title': 'InnBucks'},
+            {'id': 'pay_OMARI',    'title': 'Omari'},
+            {'id': 'pay_cancel',   'title': 'Cancel'},
+        ]
+        self.whatsapp.send_interactive_buttons(
+            lender.phone_number,
+            message_to_send,
+            buttons,
+        )
+
+        lender.user_mode   = 'lender_activation_payment'
+        lender.user_status = 'payment_method'
+        lender.set_session_data('pending_activation_contract_id', contract.id)
+        lender.save(update_fields=["user_mode", "user_status"])
+        return True    
+    
+    def handle_lender_activation_payment(self, person, message_text):
+        """
+        The lender is paying the activation fee for a contract.
+        `person` here is the LENDER (the one who initiated the credit).
+        """
+        contract_id = person.get_session_key('pending_activation_contract_id')
+        contract = LendingContract.objects.filter(id=contract_id).first()
+        if not contract:
+            person.user_mode = 'welcome'
+            person.user_status = 'welcome'
+            person.save(update_fields=['user_mode', 'user_status'])
+            return self.whatsapp.send_message(
+                person.phone_number,
+                "No pending activation payment found. Please start again."
+            )
+
+        text = message_text.strip().lower()
+
+        # --- cancel ---
+        if text in ('pay_cancel', 'cancel', 'no', 'exit'):
+            contract.status = 'cancelled'
+            contract.save(update_fields=['status'])
+            person.user_mode = 'welcome'
+            person.user_status = 'welcome'
+            person.save(update_fields=['user_mode', 'user_status'])
+            self.whatsapp.send_message(
+                person.phone_number,
+                "You cancelled the activation payment. The contract has been cancelled."
+            )
+            self.whatsapp.send_message(
+                contract.borrower.phone_number,
+                f"{contract.lender.full_name} cancelled the credit activation, so the credit of "
+                f"{contract.currency}{contract.amount} was not activated."
+            )
+            return True
+
+        payment_methods = ['ecocash', 'innbucks', 'omari']
+
+        # --- step 1: pick method ---
+        if person.user_status == "payment_method":
+            if text not in payment_methods:
+                buttons = [
+                    {'id': 'pay_ECOCASH',  'title': 'EcoCash'},
+                    {'id': 'pay_INNBUCKS', 'title': 'InnBucks'},
+                    {'id': 'pay_OMARI',    'title': 'Omari'},
+                    {'id': 'pay_cancel',   'title': 'Cancel'},
+                ]
+                return self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Please choose a valid payment method.",
+                    buttons,
+                )
+            person.user_status = "payment_number"
+            person.set_session_data('payment_method', text)
+            person.save(update_fields=['user_status'])
+            return self.whatsapp.send_message(
+                person.phone_number,
+                f"You selected {text}. Please enter your *{text}* phone number, "
+                f"e.g. 077XXXXXXX."
+            )
+
+        # --- step 2: phone number ---
+        if person.user_status == "payment_number":
+            if len(text) != 10 or not text.isdigit():
+                return self.whatsapp.send_message(
+                    person.phone_number,
+                    "Invalid phone number. Please enter a valid 10-digit number, e.g. 077XXXXXXX."
+                )
+            method = person.get_session_key('payment_method', 'ecocash')
+            person.set_session_data(f'{method}_number', text)
+            person.user_status = "inquiry_payment"
+            person.save(update_fields=['user_status'])
+
+        # --- step 3: charge the LENDER ---
+        method = person.get_session_key('payment_method', 'ecocash')
+        payment_phone_number = person.get_session_key(f'{method}_number', person.phone_number)
+
+        try:
+            payment = PaymentService.charge(
+                phone_number=payment_phone_number,
+                amount=settings.CREDIT_ACCEPTANCE_FEE_AMOUNT,
+                currency=settings.CREDIT_ACCEPTANCE_FEE_CURRENCY,
+                description=(
+                    f"Contract activation fee for {contract.currency}{contract.amount} "
+                    f"to {contract.borrower.full_name}"
+                ),
+                payment_method=method.upper(),
+                payer=person,   # <-- lender
+                metadata={
+                    'kind': 'credit_acceptance_fee',
+                    'contract_id': contract.id,
+                },
+            )
+        except Exception as exc:
+            self.whatsapp.send_message(
+                person.phone_number,
+                f"Could not start the payment: {exc}. Please try again or reply 'cancel'."
+            )
+            return False
+
+        contract.payment_reference = payment.reference
+        contract.status = 'payment_processing'
+        contract.save(update_fields=['status', 'payment_reference'])
+
+        person.user_mode = 'welcome'
+        person.user_status = 'welcome'
+        person.save(update_fields=['user_mode', 'user_status'])
+
+        self.whatsapp.send_message(
+            person.phone_number,
+            f"A payment request for {payment.amount} {payment.currency} has been "
+            f"sent to your phone: *{payment_phone_number}*. "
+            f"Please enter your {method} PIN to approve."
+        )
+        return True
+        
     
     def handle_login(self, person, message_text):
         try:
@@ -746,7 +1106,7 @@ class MessageHandler:
         elif person.user_mode =="signup":
             self.whatsapp.send_message(person.phone_number, "Please finish signup to continue.")
     
-    def handle_signup(self, person, message_text):
+    def handle_signup(self, person, message_text,media_url=None):
         """Full signup + identity verification flow"""
         from users.services.identity_service import (
             fetch_individual,
@@ -958,8 +1318,40 @@ class MessageHandler:
         # =========================================================
         elif person.user_status == 'verify_details':
             if "[Image]" in message_text:
-                self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify your details.")
-                
+                from .id_verification_service import verify_id_from_image
+                # self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify your details.")
+            
+                # media_url must be passed through from the webhook
+                if not media_url:
+                    self.whatsapp.send_message(
+                        person.phone_number,
+                        "We couldn't access the image. Please resend your ID photo.",
+                    )
+                    return
+
+                self.whatsapp.send_message(
+                    person.phone_number,
+                    "Image received. Please wait while we verify your details.",
+                )
+
+                result = verify_id_from_image(person, media_url)
+
+                if result["auto_verified"]:
+                    person.user_status = 'completed'
+                    person.user_mode = 'welcome'
+                    person.save(update_fields=['user_status', 'user_mode'])
+                    self.whatsapp.send_message(
+                        person.phone_number,
+                        "✅ Your identity has been verified. You're all set!",
+                    )
+                else:
+                    person.user_status = 'verification_hold'
+                    person.save(update_fields=['user_status'])
+                    self.whatsapp.send_message(
+                        person.phone_number,
+                        "We couldn't automatically verify your ID. "
+                        "Our team will review it manually and get back to you shortly.",
+                    )
             if message_text == '1' or message_text.lower() in ["confirm", "yes","1."]:
                 if not person.otp_code:
                     person.user_status = "otp_setup"

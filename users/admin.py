@@ -1,29 +1,36 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import Person, User
-
+# chatbot/admin.py
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ['id','phone_number', 'national_id', 'full_name', 'user_mode', 'user_status', 'is_verified']
-    list_filter = ['user_mode', 'user_status', 'is_verified']
-    search_fields = ['phone_number', 'national_id', 'full_name']
-    readonly_fields = ['created_at', 'updated_at', 'last_interaction']
-    
-    fieldsets = (
-        ('Personal Info', {
-            'fields': ('phone_number', 'national_id', 'full_name','mentioned_name', 'oldest_creditor','old_phone_number','mentioned_phone_number','address','uploader')
-        }),
-        ('Status', {
-            'fields': ('user_mode', 'user_status', 'is_verified', 'credit_score', 'amount_owed', 'currency', 'name_match_score', 'phone_match_score','verification_status')
-        }),
-        ('Session', {
-            'fields': ('session_data', 'last_interaction','otp_code')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+    list_display = (
+        'phone_number', 'full_name', 'national_id',
+        'is_auto_verified', 'needs_manual_review',
+        'id_verification_score', 'verification_status',
     )
+    list_filter = ('is_auto_verified', 'needs_manual_review', 'verification_status')
+    search_fields = ('phone_number', 'national_id', 'full_name')
+    readonly_fields = ('id_verification_raw_text', 'id_verification_score')
+
+    actions = ['approve_verification', 'reject_verification']
+
+    @admin.action(description="Approve ID verification")
+    def approve_verification(self, request, queryset):
+        queryset.update(
+            is_verified=True, is_auto_verified=False,
+            needs_manual_review=False,
+            verification_status='verified',
+            id_verification_method='manual',
+        )
+
+    @admin.action(description="Reject ID verification")
+    def reject_verification(self, request, queryset):
+        queryset.update(
+            is_verified=False, needs_manual_review=False,
+            verification_status='rejected',
+            id_verification_method='manual',
+        )
 
 @admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):

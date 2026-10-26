@@ -70,6 +70,7 @@ def whatsapp_webhook(request):
                 elif message_type == 'image':
                     image_data = message.get('image', {})
                     media_url = image_data.get('url')
+                    print("Image URL:", media_url)
                     media_caption = image_data.get('caption', '')
                     # Set message text to indicate it's an image
                     message_text = f"[Image]{' - ' + media_caption if media_caption else ''}"
@@ -215,6 +216,7 @@ def whatsapp_webhook(request):
                         from_number=from_number,
                         message_text=message_text,
                         message_id=message_id,
+                        media_url=media_url,
                         is_quoted=is_quoted,
                         direction=direction
                     )

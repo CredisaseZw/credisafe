@@ -109,6 +109,11 @@ class Person(models.Model):
         ('receipting', 'Receipting'),
         ('accounting', 'Accounting'),
         ('accept_status_check', 'Accept Status Check'),
+        ('payment_mode', 'Payment Mode'),
+        ('payment_confirmation', 'Payment Confirmation'),
+        ('inquiry_payment', 'Inquiry Payment'),
+        ('record_upload_payment', 'Record Upload Payment'),
+        ('subscription_payment', 'Subscription Payment'),
         
     ]
     
@@ -154,6 +159,12 @@ class Person(models.Model):
         ('receipt_date', 'Receipt Date'),
         ('offer_lending', 'Offer Lending'),
         ('direct_lending', 'Direct Lending'),
+        ('inquiry_payment', 'Inquiring Payment'),
+        ('record_upload_payment', 'Recording Upload Payment'),
+        ('subscription_payment', 'Subscription Payment'),
+        ('payment_number', 'Payment Number'),
+        ('payment_method', 'Payment Method'),
+        
         
     ]
     
@@ -188,6 +199,17 @@ class Person(models.Model):
     name_match_score = models.FloatField(null=True, blank=True)
     phone_match_score = models.FloatField(null=True, blank=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
+    
+    is_auto_verified = models.BooleanField(default=False)
+    needs_manual_review = models.BooleanField(default=False)
+    id_verification_score = models.FloatField(null=True, blank=True)
+    id_verification_raw_text = models.TextField(null=True, blank=True)
+    id_verification_attempted_at = models.DateTimeField(null=True, blank=True)
+    id_verification_method = models.CharField(
+        max_length=20,
+        choices=[('ocr', 'OCR'), ('manual', 'Manual'), ('none', 'None')],
+        default='none',
+    )
 
     
     class Meta:

@@ -31,6 +31,8 @@ class CreditCheck(models.Model):
         ('failed', 'Failed'),
         ('expired', 'Expired'),
         ('rejected', 'Rejected'),
+        ('awaiting_payment', 'Awaiting Payment'),
+        ('payment_processing', 'Payment Processing'),
     ]
     
     CHECK_TYPE_CHOICES = [
@@ -55,6 +57,8 @@ class CreditCheck(models.Model):
     credit_history_snapshot = models.JSONField(null=True, blank=True)
     checked_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+
     
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -77,6 +81,10 @@ class CreditCheck(models.Model):
 class LendingContract(models.Model):
     """Track lending agreements"""
     STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('awaiting_borrower', 'Awaiting Borrower Acceptance'),
+        ('awaiting_payment', 'Awaiting Lender Payment'),
+        ('payment_processing', 'Payment Processing'),
         ('active', 'Active'),
         ('settled', 'Settled'),
         ('defaulted', 'Defaulted'),
@@ -109,6 +117,8 @@ class LendingContract(models.Model):
         blank=True,
         related_name='contracts'
     )
+    payment_reference = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     instalment_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)

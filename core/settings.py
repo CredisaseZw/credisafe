@@ -39,6 +39,7 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 WHATSAPP_BUSINESS_PHONE_NUMBER = os.getenv('WHATSAPP_BUSINESS_PHONE_NUMBER', '781668896')
 ALLOWED_HOSTS = [
     "unpoised-unformidably-shanon.ngrok-free.dev",
+    ".trycloudflare.com",
     "localhost",
     "127.0.0.1",
     "chatbot.credi-safe.com",
@@ -62,7 +63,8 @@ INSTALLED_APPS = [
     'users',
     'chatbot',
     'credit',
-    'api'
+    'api',
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -287,3 +289,29 @@ LOGGING = {
 LOGS_DIR = BASE_DIR / 'logs'
 if not LOGS_DIR.exists():
     LOGS_DIR.mkdir()
+    
+
+FINIVEX_BASE_URL = "https://gateway.finivex.online/api/pg"
+FINIVEX_API_KEY = os.getenv("FINIVEX_API_KEY")       # pk_live_...
+FINIVEX_API_SECRET = os.getenv("FINIVEX_API_SECRET") # sk_live_...
+
+# Optional: only needed if you embed the widget directly in a template
+FINIVEX_WIDGET_URL = "https://gateway.finivex.online/api/pg/v1/payments/widget-session"
+
+# Where Finivex should POST webhooks
+FINIVEX_WEBHOOK_URL = os.getenv("FINIVEX_WEBHOOK_URL", "https://credi-safe.com/api/payments/webhook/")
+
+# Poll interval (seconds) for the background task
+FINIVEX_POLL_INTERVAL = 60
+FINIVEX_POLL_MAX_AGE_HOURS = 24   # stop polling payments older than thisN
+
+
+#INQUIRY OPTIONS
+CREDIT_REPORT_PAYWALL_ENABLED = os.getenv("CREDIT_REPORT_PAYWALL_ENABLED", "True") == "True"
+CREDIT_REPORT_FEE_AMOUNT       = os.getenv("CREDIT_REPORT_FEE_AMOUNT", "1.00")
+CREDIT_REPORT_FEE_CURRENCY     = os.getenv("CREDIT_REPORT_FEE_CURRENCY", "USD")
+
+#CREDIT ACCEPT OPTIONS
+CREDIT_ACCEPTANCE_PAYWALL_ENABLED = os.getenv("CREDIT_ACCEPTANCE_PAYWALL_ENABLED", "True") == "True"
+CREDIT_ACCEPTANCE_FEE_AMOUNT      = os.getenv("CREDIT_ACCEPTANCE_FEE_AMOUNT", "1.00")
+CREDIT_ACCEPTANCE_FEE_CURRENCY    = os.getenv("CREDIT_ACCEPTANCE_FEE_CURRENCY", "USD")
