@@ -367,8 +367,8 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment request for {payment.amount} {payment.currency} has been "
-            f"sent to your phone: *{payment_phone_number}*. Please enter your {last_payment_method} PIN to approve."
+            f"A payment prompt of {payment.amount} {payment.currency} for your CrediSafe Enquiry has been sent to {payment_phone_number}."
+            f"Please check your phone screen for the {last_payment_method} pop-up prompt and enter your PIN to approve."
         )
         return True
     
@@ -900,7 +900,6 @@ class MessageHandler:
         currency = settings.CREDIT_ACCEPTANCE_FEE_CURRENCY
 
         message_to_send=(
-            lender.phone_number,
             f"{contract.borrower.full_name} ({contract.borrower.national_id}) "
             f"has accepted your credit of {contract.currency}{contract.amount}.\n\n"
             f"To activate the contract, a fee of {currency} {amount} is required. "
@@ -1034,9 +1033,8 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment request for {payment.amount} {payment.currency} has been "
-            f"sent to your phone: *{payment_phone_number}*. "
-            f"Please enter your {method} PIN to approve."
+            f"A payment prompt of {payment.amount} {payment.currency} for your CrediSafe Enquiry has been sent to {payment_phone_number}."
+            f"Please check your phone screen for the {method} pop-up prompt and enter your PIN to approve."
         )
         return True
         
