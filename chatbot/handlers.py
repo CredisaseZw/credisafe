@@ -113,12 +113,13 @@ class MessageHandler:
             return self.handle_borrower_confirmation(person, message_text)
         elif person.user_mode =="accept_status_check":
             return self.handle_accept_status_check(person, message_text)
-        
+        elif person.user_mode=="lender_activation_payment":
+            return self.handle_lender_activation_payment(person, message_text)
         elif person.user_mode =="addition_aborted":
-            self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
+            return self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
         
         elif person.user_mode == "edit_borrower":
-            self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
+            return self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
         elif person.user_mode =='borrower_signup':
             return self.handle_new_borrower(person, message_text)
         
