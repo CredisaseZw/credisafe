@@ -26,7 +26,7 @@ def on_payment_status_change(sender, payment: Payment, **kwargs):
 
     handler = _HANDLERS.get(kind)
     if not handler:
-        logger.warning("No handler for kind=%r (ref=%s)", kind, payment.reference)
+        print("No handler for kind=%r (ref=%s)", kind, payment.reference)
         return
 
     try:
@@ -53,7 +53,7 @@ def _handle_credit_report_fee(payment: Payment):
     ).first()
 
     if not credit_check:
-        logger.warning("Report fee paid but no CreditCheck linked to %s",
+        print("Report fee paid but no CreditCheck linked to %s",
                        payment.reference)
         return
 
@@ -81,7 +81,7 @@ def _handle_credit_acceptance_fee(payment: Payment):
     ).first()
 
     if not contract:
-        logger.warning("Acceptance fee paid but no LendingContract linked to %s",
+        print("Acceptance fee paid but no LendingContract linked to %s",
                        payment.reference)
         return
 
