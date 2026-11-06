@@ -1,333 +1,1068 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import api from '../services/api';
 import {
-  PlusCircleIcon, PencilIcon, TrashIcon, EyeIcon, XIcon,
-  CheckCircleIcon, XCircleIcon, SearchIcon, PhotographIcon,
+  PlusCircleIcon,
+  PencilIcon,
+  TrashIcon,
+  EyeIcon,
+  XCircleIcon,
+  CheckCircleIcon,
+  SearchIcon,
+  ShieldExclamationIcon,
+  ShieldCheckIcon,
+  PhotographIcon,
+  BanIcon,
+  RefreshIcon,
 } from '@heroicons/react/outline';
 
-const initialForm = {
-  full_name: '', national_id: '', phone_number: '', address: '',
-  company_id: '', is_verified: false, verification_status: 'pending',
-};
-
-const getRows = (data) => Array.isArray(data) ? data : (data?.results || []);
-const statusLabel = (person) => person.is_verified
-  ? 'Verified'
-  : (person.verification_status || 'pending').replaceAll('_', ' ');
-
-const statusClass = (person) => person.is_verified || person.verification_status === 'verified'
-  ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
-  : person.verification_status === 'rejected'
-    ? 'bg-red-50 text-red-700 ring-red-600/20'
-    : 'bg-amber-50 text-amber-700 ring-amber-600/20';
-
 const PersonManagement = () => {
-  const navigate = useNavigate();
   const [persons, setPersons] = useState([]);
-  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [verificationStatus, setVerificationStatus] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [manualReviewFilter, setManualReviewFilter] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingPerson, setEditingPerson] = useState(null);
-  const [form, setForm] = useState(initialForm);
-  const [imagePerson, setImagePerson] = useState(null);
-  const [personImages, setPersonImages] = useState([]);
-  const [imagesLoading, setImagesLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [companies, setCompanies] = useState([]);
 
-  const fetchPersons = useCallback(async () => {
+  const [images, setImages] = useState([]);
+  const [showImagesModal, setShowImagesModal] = useState(false);
+  const [imagesLoading, setImagesLoading] = useState(false);
+
+  const [toast, setToast] = useState(null);
+
+  const [formData, setFormData] = useState({
+    full_name: '',
+    national_id: '',
+    phone_number: '',
+    address: '',
+    company_id: '',
+    is_verified: false,
+    verification_status: 'pending',
+  });
+
+  // --------------------------------------------------
+  // Toast notifications
+  // --------------------------------------------------
+
+  const showToast = (message, type = 'info') => {
+    setToast({
+      message,
+      type,
+      id: Date.now(),
+    });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timeout = setTimeout(() => {
+      setToast(null);
+    }, 3500);
+
+    return () => clearTimeout(timeout);
+  }, [toast]);
+
+  // --------------------------------------------------
+  // Fetch persons and companies
+  // --------------------------------------------------
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    setError('');
+
     try {
       const params = {};
-      if (search.trim()) params.search = search.trim();
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (verificationStatus) params.verification_status = verificationStatus;
-      const response = await api.get('/persons/', { params });
-      setPersons(getRows(response.data));
-    } catch (err) {
-      console.error('Failed to load persons:', err);
-      setError('Could not load individuals. Please try again.');
+
+      if (manualReviewFilter !== '') {
+        params.needs_manual_review = manualReviewFilter;
+      }
+
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const [personsRes, companiesRes] = await Promise.all([
+        api.get('/persons/', { params }),
+        api.get('/companies/'),
+      ]);
+
+      setPersons(
+        personsRes.data.results || personsRes.data || []
+      );
+
+      setCompanies(
+        companiesRes.data.results || companiesRes.data || []
+      );
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      showToast('Failed to load persons. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, dateFrom, dateTo, verificationStatus]);
+  }, [manualReviewFilter]);
 
-  const fetchCompanies = useCallback(async () => {
-    try {
-      const response = await api.get('/companies/');
-      setCompanies(getRows(response.data));
-    } catch (err) {
-      console.error('Failed to load companies:', err);
-    }
-  }, []);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
-  useEffect(() => { fetchPersons(); }, [fetchPersons]);
-
-  const counts = useMemo(() => ({
-    total: persons.length,
-    verified: persons.filter(p => p.is_verified || p.verification_status === 'verified').length,
-    pending: persons.filter(p => !p.is_verified && (!p.verification_status || p.verification_status === 'pending')).length,
-    rejected: persons.filter(p => p.verification_status === 'rejected').length,
-  }), [persons]);
-
-  const resetForm = () => setForm(initialForm);
-
-  const openAdd = () => {
-    setEditingPerson(null);
-    resetForm();
-    setShowForm(true);
+  const handleSearch = (e) => {
+    e.preventDefault();
+    fetchData();
   };
 
-  const openEdit = (person) => {
-    setEditingPerson(person);
-    setForm({
-      full_name: person.full_name || '',
-      national_id: person.national_id || '',
-      phone_number: person.phone_number || '',
-      address: person.address || '',
-      company_id: person.company?.id || person.company_id || '',
-      is_verified: !!person.is_verified,
-      verification_status: person.verification_status || 'pending',
-    });
-    setShowForm(true);
-  };
+  // --------------------------------------------------
+  // Add person
+  // --------------------------------------------------
 
-  const savePerson = async (event) => {
-    event.preventDefault();
-    setSaving(true);
+  const handleAddPerson = async (e) => {
+    e.preventDefault();
+
     try {
-      const payload = {
-        ...form,
-        company_id: form.company_id || null,
+      const data = {
+        ...formData,
+        company: formData.company_id
+          ? parseInt(formData.company_id, 10)
+          : null,
       };
-      if (editingPerson) {
-        await api.patch(`/persons/${editingPerson.id}/`, payload);
-      } else {
-        await api.post('/persons/', payload);
-      }
-      setShowForm(false);
+
+      delete data.company_id;
+
+      await api.post('/persons/', data);
+
+      showToast('Person added successfully.', 'success');
+
+      setShowAddModal(false);
+      resetForm();
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error adding person:', error);
+
+      showToast(
+        error.response?.data?.detail ||
+        'Failed to add person. Please try again.',
+        'error'
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Edit person
+  // --------------------------------------------------
+
+  const handleEditPerson = async (e) => {
+    e.preventDefault();
+
+    try {
+      const data = {
+        ...formData,
+        company: formData.company_id
+          ? parseInt(formData.company_id, 10)
+          : null,
+      };
+
+      delete data.company_id;
+
+      await api.put(`/persons/${editingPerson.id}/`, data);
+
+      showToast('Person updated successfully.', 'success');
+
       setEditingPerson(null);
       resetForm();
-      await fetchPersons();
-    } catch (err) {
-      console.error('Failed to save person:', err);
-      alert(err.response?.data?.detail || 'Could not save this individual.');
-    } finally {
-      setSaving(false);
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error updating person:', error);
+
+      showToast(
+        error.response?.data?.detail ||
+        'Failed to update person. Please try again.',
+        'error'
+      );
     }
   };
 
-  const runAction = async (person, action) => {
-    const labels = { verify: 'verify', reject: 'reject', delete: 'delete' };
-    if (action === 'delete' && !window.confirm(`Permanently delete ${person.full_name || 'this individual'}?`)) return;
-    if (action === 'reject' && !window.confirm(`Reject ${person.full_name || 'this individual'}?`)) return;
-    setActionLoading(true);
+  // --------------------------------------------------
+  // Delete person
+  // --------------------------------------------------
+
+  const handleDeletePerson = async (personId) => {
+    if (!window.confirm('Are you sure you want to delete this person?')) {
+      return;
+    }
+
     try {
-      if (action === 'delete') await api.delete(`/persons/${person.id}/`);
-      else await api.post(`/persons/${person.id}/${action}/`);
-      if (imagePerson?.id === person.id && action === 'delete') closeImageModal();
-      await fetchPersons();
-    } catch (err) {
-      console.error(`Failed to ${labels[action]} person:`, err);
-      alert(err.response?.data?.error || err.response?.data?.detail || `Could not ${labels[action]} this individual.`);
-    } finally {
-      setActionLoading(false);
+      await api.delete(`/persons/${personId}/`);
+
+      showToast('Person deleted successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting person:', error);
+      showToast('Failed to delete person.', 'error');
     }
   };
 
-  const openImages = async (person) => {
-    setImagePerson(person);
-    setPersonImages([]);
-    setSelectedImage(null);
+  // --------------------------------------------------
+  // Verify person
+  // --------------------------------------------------
+
+  const handleVerifyPerson = async (personId) => {
+    if (!window.confirm('Are you sure you want to verify this person?')) {
+      return;
+    }
+
+    try {
+      await api.post(`/persons/${personId}/verify/`);
+
+      showToast('Person verified successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error verifying person:', error);
+
+      showToast(
+        error.response?.data?.error ||
+        'Failed to verify person.',
+        'error'
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Unverify person
+  // --------------------------------------------------
+
+  const handleUnverifyPerson = async (personId) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to remove this person’s verification?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api.post(`/persons/${personId}/unverify/`);
+
+      showToast('Person verification removed successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error unverifying person:', error);
+
+      showToast(
+        error.response?.data?.error ||
+        'Failed to remove verification.',
+        'error'
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Reject person
+  // --------------------------------------------------
+
+  const handleRejectPerson = async (personId) => {
+    if (!window.confirm('Are you sure you want to reject this person?')) {
+      return;
+    }
+
+    try {
+      await api.post(`/persons/${personId}/reject/`);
+
+      showToast('Person rejected successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error rejecting person:', error);
+
+      showToast(
+        error.response?.data?.error ||
+        'Failed to reject person.',
+        'error'
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Activate person
+  // --------------------------------------------------
+
+  const handleActivatePerson = async (personId) => {
+    try {
+      await api.post(`/persons/${personId}/activate/`);
+
+      showToast('Person activated successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error activating person:', error);
+      showToast('Failed to activate person.', 'error');
+    }
+  };
+
+  // --------------------------------------------------
+  // Deactivate person
+  // --------------------------------------------------
+
+  const handleDeactivatePerson = async (personId) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to deactivate this person?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api.post(`/persons/${personId}/deactivate/`);
+
+      showToast('Person deactivated successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error deactivating person:', error);
+      showToast('Failed to deactivate person.', 'error');
+    }
+  };
+
+  // --------------------------------------------------
+  // Block person
+  // --------------------------------------------------
+
+  const handleBlockPerson = async (personId) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to block this person?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api.post(`/persons/${personId}/block/`);
+
+      showToast('Person blocked successfully.', 'success');
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error blocking person:', error);
+
+      showToast(
+        error.response?.data?.error ||
+        'Failed to block person.',
+        'error'
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // View ID images
+  // --------------------------------------------------
+
+  const handleViewImages = async (personId) => {
     setImagesLoading(true);
+
     try {
-      const response = await api.get(`/persons/${person.id}/images/`);
-      setPersonImages(response.data?.images || []);
-    } catch (err) {
-      console.error('Failed to load ID images:', err);
-      alert('Could not load uploaded ID images.');
+      const response = await api.get(
+        `/persons/${personId}/images/`
+      );
+
+      const personImages = response.data?.images || [];
+
+      if (personImages.length === 0) {
+        showToast(
+          'No ID images are available for this person.',
+          'info'
+        );
+
+        return;
+      }
+
+      setImages(personImages);
+      setShowImagesModal(true);
+    } catch (error) {
+      console.error('Error retrieving ID images:', error);
+
+      showToast(
+        'Unable to retrieve ID images. Please try again.',
+        'error'
+      );
     } finally {
       setImagesLoading(false);
     }
   };
 
-  const closeImageModal = () => {
-    setImagePerson(null);
-    setPersonImages([]);
-    setSelectedImage(null);
+  // --------------------------------------------------
+  // Form helpers
+  // --------------------------------------------------
+
+  const resetForm = () => {
+    setFormData({
+      full_name: '',
+      national_id: '',
+      phone_number: '',
+      address: '',
+      company_id: '',
+      is_verified: false,
+      verification_status: 'pending',
+    });
   };
 
-  const clearFilters = () => {
-    setSearch('');
-    setDateFrom('');
-    setDateTo('');
-    setVerificationStatus('');
+  const openEditModal = (person) => {
+    setEditingPerson(person);
+
+    setFormData({
+      full_name: person.full_name || '',
+      national_id: person.national_id || '',
+      phone_number: person.phone_number || '',
+      address: person.address || '',
+      company_id: person.company?.id || person.company_id || '',
+      is_verified: person.is_verified || false,
+      verification_status: person.verification_status || 'pending',
+    });
   };
+
+  const closeFormModal = () => {
+    setShowAddModal(false);
+    setEditingPerson(null);
+    resetForm();
+  };
+
+  // --------------------------------------------------
+  // Render helpers
+  // --------------------------------------------------
+
+  const getVerificationStatus = (person) => {
+    if (person.is_verified) {
+      return {
+        label: 'Verified',
+        className: 'bg-green-100 text-green-800',
+      };
+    }
+
+    if (person.verification_status === 'rejected') {
+      return {
+        label: 'Rejected',
+        className: 'bg-red-100 text-red-800',
+      };
+    }
+
+    if (person.needs_manual_review) {
+      return {
+        label: 'Manual Review',
+        className: 'bg-orange-100 text-orange-800',
+      };
+    }
+
+    if (person.verification_status === 'hold') {
+      return {
+        label: 'On Hold',
+        className: 'bg-gray-100 text-gray-700',
+      };
+    }
+
+    return {
+      label: 'Pending',
+      className: 'bg-yellow-100 text-yellow-800',
+    };
+  };
+
+  const isPersonBlocked = (person) => {
+    return (
+      person.user_mode === 'suspension' ||
+      person.user_status === 'hold'
+    );
+  };
+
+  const isPersonActive = (person) => {
+    return person.is_active !== false;
+  };
+
+  const filteredPersons = persons.filter((person) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+
+    return (
+      person.full_name?.toLowerCase().includes(query) ||
+      person.national_id?.toLowerCase().includes(query) ||
+      person.phone_number?.toLowerCase().includes(query)
+    );
+  });
+
+  // --------------------------------------------------
+  // Loading screen
+  // --------------------------------------------------
+
+  if (loading && persons.length === 0) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <AdminSidebar />
+
+        <div className="flex-1 ml-64 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------
+  // Main UI
+  // --------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-gray-50">
       <AdminSidebar />
-      <main className="min-w-0 md:ml-64 p-4 sm:p-6 lg:p-8">
-        <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+      <div className="flex-1 ml-64 overflow-y-auto p-8">
+
+        {/* Header */}
+
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">CrediSafe / Administration</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Individuals</h1>
-            <p className="mt-1 text-sm text-slate-500">Manage personal records and review identity documents.</p>
+            <h1 className="text-3xl font-bold text-primary">
+              CREDISAFE
+            </h1>
+
+            <h2 className="text-xl font-semibold text-gray-700 mt-1">
+              Person Management
+            </h2>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Manage individual profiles, verification and account status.
+            </p>
           </div>
-          <button onClick={openAdd} className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">
-            <PlusCircleIcon className="h-5 w-5" /> Add individual
+
+          <button
+            onClick={() => {
+              resetForm();
+              setShowAddModal(true);
+            }}
+            className="btn-primary flex items-center gap-2 px-6 py-2"
+          >
+            <PlusCircleIcon className="w-5 h-5" />
+            Add Person
           </button>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            ['Total individuals', counts.total, 'All matching records'],
-            ['Verified', counts.verified, 'Approved identities'],
-            ['Pending review', counts.pending, 'Awaiting a decision'],
-            ['Rejected', counts.rejected, 'Rejected identities'],
-          ].map(([label, value, hint]) => (
-            <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">{label}</p>
-              <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
-              <p className="mt-1 text-xs text-slate-400">{hint}</p>
+        {/* Search and filters */}
+
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-col lg:flex-row gap-4"
+          >
+            <div className="flex-1 relative">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+
+              <input
+                type="text"
+                placeholder="Search by name, national ID, or phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
             </div>
-          ))}
+
+            <select
+              value={manualReviewFilter}
+              onChange={(e) => setManualReviewFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">All Persons</option>
+              <option value="true">
+                Requires Manual Review
+              </option>
+              <option value="false">
+                Does Not Require Manual Review
+              </option>
+            </select>
+
+            <button
+              type="submit"
+              className="btn-primary px-6 py-2 flex items-center justify-center gap-2"
+            >
+              <SearchIcon className="w-4 h-4" />
+              Search
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setManualReviewFilter('');
+              }}
+              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+            >
+              Clear
+            </button>
+          </form>
         </div>
 
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-4 sm:p-5">
-            <div className="mb-4">
-              <h2 className="font-semibold text-slate-900">Individual records</h2>
-              <p className="mt-1 text-sm text-slate-500">Search and filter the records below.</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); fetchPersons(); }} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="relative xl:col-span-2">
-                <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Name, national ID or phone" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
-              </div>
-              <input aria-label="Date from" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
-              <input aria-label="Date to" type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
-              <select value={verificationStatus} onChange={e => setVerificationStatus(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
-                <option value="">All verification statuses</option>
-                <option value="pending">Pending</option>
-                <option value="verified">Verified</option>
-                <option value="rejected">Rejected</option>
-              </select>
-              <div className="flex gap-2 md:col-span-2 xl:col-span-5 xl:justify-end">
-                <button type="button" onClick={clearFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Clear filters</button>
-                <button type="submit" className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700">Apply filters</button>
-              </div>
-            </form>
-          </div>
+        {/* Results summary */}
 
-          {error && <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-sm text-gray-600">
+            Showing <strong>{filteredPersons.length}</strong> person(s)
+          </p>
+
+          <button
+            onClick={fetchData}
+            className="text-sm text-primary hover:text-blue-800 flex items-center gap-2"
+          >
+            <RefreshIcon className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+
+        {/* Persons table */}
+
+        <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Individual</th>
-                  <th className="px-5 py-3 font-semibold">National ID</th>
-                  <th className="px-5 py-3 font-semibold">Phone</th>
-                  <th className="px-5 py-3 font-semibold">Date added</th>
-                  <th className="px-5 py-3 font-semibold">Verification</th>
-                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3">Full Name</th>
+                  <th className="px-4 py-3">National ID</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Verification</th>
+                  <th className="px-4 py-3">Account</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr><td colSpan="6" className="px-5 py-14 text-center text-sm text-slate-500">Loading individuals...</td></tr>
-                ) : persons.length === 0 ? (
-                  <tr><td colSpan="6" className="px-5 py-14 text-center text-sm text-slate-500">No individuals match these filters.</td></tr>
-                ) : persons.map(person => (
-                  <tr key={person.id} className="hover:bg-slate-50/80">
-                    <td className="px-5 py-4">
-                      <button onClick={() => navigate(`/admin/persons/${person.id}`)} className="text-left font-semibold text-slate-900 hover:text-indigo-600">{person.full_name || 'Unnamed individual'}</button>
-                      <p className="mt-0.5 text-xs text-slate-400">Record #{person.id}</p>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-sm text-slate-600">{person.national_id || '—'}</td>
-                    <td className="px-5 py-4 text-sm text-slate-600">{person.phone_number || '—'}</td>
-                    <td className="px-5 py-4 text-sm text-slate-500">{person.created_at ? new Date(person.created_at).toLocaleDateString() : '—'}</td>
-                    <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClass(person)}`}>{statusLabel(person)}</span></td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button title="Review ID images" onClick={() => openImages(person)} className="rounded-md p-2 text-indigo-600 hover:bg-indigo-50"><PhotographIcon className="h-5 w-5" /></button>
-                        <button title="View profile" onClick={() => navigate(`/admin/persons/${person.id}`)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100"><EyeIcon className="h-5 w-5" /></button>
-                        <button title="Edit" onClick={() => openEdit(person)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100"><PencilIcon className="h-5 w-5" /></button>
-                        <button title="Delete" onClick={() => runAction(person, 'delete')} className="rounded-md p-2 text-red-600 hover:bg-red-50"><TrashIcon className="h-5 w-5" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+
+              <tbody className="divide-y divide-gray-200">
+                {filteredPersons.map((person) => {
+                  const verification = getVerificationStatus(person);
+                  const blocked = isPersonBlocked(person);
+                  const active = isPersonActive(person);
+
+                  return (
+                    <tr
+                      key={person.id}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-800">
+                          {person.full_name || 'Unknown'}
+                        </div>
+
+                        {person.needs_manual_review && (
+                          <span className="text-xs text-orange-600 font-medium">
+                            Requires manual review
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-sm font-mono">
+                        {person.national_id || '-'}
+                      </td>
+
+                      <td className="px-4 py-3 text-sm">
+                        {person.phone_number || '-'}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${verification.className}`}
+                        >
+                          {verification.label}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {blocked ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Blocked
+                          </span>
+                        ) : active ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center items-center gap-3 flex-wrap">
+
+                          {/* View ID images */}
+
+                          <button
+                            onClick={() => handleViewImages(person.id)}
+                            disabled={imagesLoading}
+                            className="text-purple-600 hover:text-purple-800 disabled:opacity-50"
+                            title="View ID Images"
+                          >
+                            <PhotographIcon className="w-5 h-5" />
+                          </button>
+
+                          {/* Verify / Unverify */}
+
+                          {person.is_verified ? (
+                            <button
+                              onClick={() => handleUnverifyPerson(person.id)}
+                              className="text-orange-600 hover:text-orange-800"
+                              title="Unverify"
+                            >
+                              <XCircleIcon className="w-5 h-5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleVerifyPerson(person.id)}
+                              className="text-green-600 hover:text-green-800"
+                              title="Verify"
+                            >
+                              <CheckCircleIcon className="w-5 h-5" />
+                            </button>
+                          )}
+
+                          {/* Reject */}
+
+                          {person.verification_status !== 'rejected' && (
+                            <button
+                              onClick={() => handleRejectPerson(person.id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Reject"
+                            >
+                              <XCircleIcon className="w-5 h-5" />
+                            </button>
+                          )}
+
+                          {/* Activate / Deactivate */}
+
+                          {active ? (
+                            <button
+                              onClick={() => handleDeactivatePerson(person.id)}
+                              className="text-orange-600 hover:text-orange-800 text-xs font-semibold"
+                              title="Deactivate"
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleActivatePerson(person.id)}
+                              className="text-green-600 hover:text-green-800 text-xs font-semibold"
+                              title="Activate"
+                            >
+                              Activate
+                            </button>
+                          )}
+
+                          {/* Block */}
+
+                          {!blocked && (
+                            <button
+                              onClick={() => handleBlockPerson(person.id)}
+                              className="text-red-700 hover:text-red-900"
+                              title="Block"
+                            >
+                              <BanIcon className="w-5 h-5" />
+                            </button>
+                          )}
+
+                          {/* Edit */}
+
+                          <button
+                            onClick={() => openEditModal(person)}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Edit"
+                          >
+                            <PencilIcon className="w-5 h-5" />
+                          </button>
+
+                          {/* Delete */}
+
+                          <button
+                            onClick={() => handleDeletePerson(person.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">Showing {persons.length} record(s) returned by the API.</div>
-        </section>
-      </main>
 
-      {imagePerson && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) closeImageModal(); }}>
-          <section role="dialog" aria-modal="true" aria-label="National ID verification" className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Identity review</p><h2 className="mt-1 text-lg font-bold text-slate-900">{imagePerson.full_name || 'Unnamed individual'}</h2><p className="text-sm text-slate-500">Compare the registered details with the uploaded document.</p></div>
-              <button onClick={closeImageModal} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><XIcon className="h-5 w-5" /></button>
-            </header>
-            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
-              <div className="min-h-[300px] bg-slate-100 p-4 sm:p-6">
-                <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-700">Uploaded national ID</h3><span className="text-xs text-slate-500">{personImages.length} image(s)</span></div>
-                {imagesLoading ? <div className="flex h-64 items-center justify-center text-sm text-slate-500">Loading images...</div>
-                  : personImages.length === 0 ? <div className="flex h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-center"><PhotographIcon className="mb-2 h-9 w-9 text-slate-400" /><p className="text-sm font-medium text-slate-600">No ID images found</p><p className="mt-1 text-xs text-slate-400">No files matched this person's phone number.</p></div>
-                  : <div className="space-y-4">
-                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2"><img src={selectedImage?.url || personImages[0].url} alt="Uploaded national ID" className="mx-auto max-h-[55vh] w-full object-contain" /></div>
-                    <div className="flex flex-wrap gap-2">{personImages.map((img, index) => <button key={img.filename || index} onClick={() => setSelectedImage(img)} className={`overflow-hidden rounded-lg border-2 ${((selectedImage?.url || personImages[0].url) === img.url) ? 'border-indigo-600' : 'border-transparent'}`}><img src={img.url} alt={`ID document ${index + 1}`} className="h-16 w-24 object-cover" /></button>)}</div>
-                  </div>}
-              </div>
-              <aside className="flex flex-col p-5">
-                <h3 className="text-sm font-semibold text-slate-900">Registered information</h3>
-                <dl className="mt-4 space-y-4">
-                  <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-400">Registered national ID</dt><dd className="mt-1 break-all rounded-lg border border-indigo-100 bg-indigo-50 p-3 font-mono text-lg font-bold text-indigo-900">{imagePerson.national_id || 'Not provided'}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Full name</dt><dd className="mt-1 text-sm font-semibold text-slate-800">{imagePerson.full_name || '—'}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Phone number</dt><dd className="mt-1 text-sm text-slate-800">{imagePerson.phone_number || '—'}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Current status</dt><dd className="mt-1"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClass(imagePerson)}`}>{statusLabel(imagePerson)}</span></dd></div>
-                </dl>
-                <p className="mt-5 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">Check that the ID number and name visible on the document match the registered information before approving.</p>
-                <div className="mt-auto space-y-2 border-t border-slate-100 pt-5">
-                  {!imagePerson.is_verified && imagePerson.verification_status !== 'rejected' && <button disabled={actionLoading} onClick={() => runAction(imagePerson, 'verify')} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><CheckCircleIcon className="h-5 w-5" /> Verify individual</button>}
-                  {!imagePerson.is_verified && imagePerson.verification_status !== 'rejected' && <button disabled={actionLoading} onClick={() => runAction(imagePerson, 'reject')} className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><XCircleIcon className="h-5 w-5" /> Reject</button>}
-                  <button onClick={() => { closeImageModal(); navigate(`/admin/persons/${imagePerson.id}`); }} className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">View full profile</button>
-                  <button disabled={actionLoading} onClick={() => runAction(imagePerson, 'delete')} className="w-full rounded-lg px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50">Delete individual</button>
+          {filteredPersons.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 font-medium">
+                No persons found
+              </p>
+
+              <p className="text-gray-400 text-sm mt-1">
+                Try changing your search or filter criteria.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Add / Edit modal */}
+
+        {(showAddModal || editingPerson) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {editingPerson ? 'Edit Person' : 'Add New Person'}
+                  </h2>
+
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter the person's information below.
+                  </p>
                 </div>
-              </aside>
-            </div>
-          </section>
-        </div>
-      )}
 
-      {showForm && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4">
-          <form onSubmit={savePerson} className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between"><h2 className="text-xl font-bold text-slate-900">{editingPerson ? 'Edit individual' : 'Add individual'}</h2><button type="button" onClick={() => setShowForm(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><XIcon className="h-5 w-5" /></button></div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {[
-                ['Full name', 'full_name', 'text'], ['National ID', 'national_id', 'text'], ['Phone number', 'phone_number', 'text'], ['Address', 'address', 'text'],
-              ].map(([label, key, type]) => <label key={key} className="text-sm font-medium text-slate-700">{label}<input required={['full_name', 'national_id', 'phone_number'].includes(key)} type={type} value={form[key]} onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></label>)}
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Company<select value={form.company_id} onChange={e => setForm(prev => ({ ...prev, company_id: e.target.value }))} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"><option value="">No company</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                <button
+                  onClick={closeFormModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircleIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={
+                  editingPerson
+                    ? handleEditPerson
+                    : handleAddPerson
+                }
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div>
+                    <label className="label-text">
+                      Full Name *
+                    </label>
+
+                    <input
+                      type="text"
+                      value={formData.full_name}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          full_name: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-text">
+                      National ID *
+                    </label>
+
+                    <input
+                      type="text"
+                      value={formData.national_id}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          national_id: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-text">
+                      Phone Number *
+                    </label>
+
+                    <input
+                      type="text"
+                      value={formData.phone_number}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          phone_number: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-text">
+                      Company
+                    </label>
+
+                    <select
+                      value={formData.company_id}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          company_id: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    >
+                      <option value="">
+                        No Company
+                      </option>
+
+                      {companies.map((company) => (
+                        <option
+                          key={company.id}
+                          value={company.id}
+                        >
+                          {company.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="label-text">
+                      Address
+                    </label>
+
+                    <input
+                      type="text"
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          address: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6 pt-4 border-t">
+                  <button
+                    type="submit"
+                    className="flex-1 btn-primary py-2 font-semibold"
+                  >
+                    {editingPerson
+                      ? 'Update Person'
+                      : 'Add Person'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={closeFormModal}
+                    className="flex-1 btn-secondary py-2 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
-            <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button><button disabled={saving} className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving...' : editingPerson ? 'Save changes' : 'Add individual'}</button></div>
-          </form>
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* ID Images modal */}
+
+        {showImagesModal && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4"
+            onClick={() => setShowImagesModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">
+                    Identification Images
+                  </h2>
+
+                  <p className="text-sm text-gray-500 mt-1">
+                    {images.length} image(s) available
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowImagesModal(false)}
+                  className="text-gray-500 hover:text-gray-800"
+                >
+                  <XCircleIcon className="w-7 h-7" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {images.map((image, index) => (
+                  <div
+                    key={image.filename || index}
+                    className="border border-gray-200 rounded-xl overflow-hidden"
+                  >
+                    <div className="bg-gray-50 flex items-center justify-center min-h-[250px]">
+                      <img
+                        src={image.url}
+                        alt={`Identification ${index + 1}`}
+                        className="w-full max-h-[450px] object-contain"
+                      />
+                    </div>
+
+                    <div className="p-3 border-t">
+                      <p className="text-sm text-gray-600 truncate">
+                        {image.filename || `Image ${index + 1}`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast notification */}
+
+        {toast && (
+          <div className="fixed top-6 right-6 z-[100] animate-fade-in">
+            <div
+              className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-xl border max-w-sm ${toast.type === 'success'
+                  ? 'bg-green-50 border-green-200 text-green-800'
+                  : toast.type === 'error'
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : 'bg-white border-gray-200 text-gray-700'
+                }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${toast.type === 'success'
+                    ? 'bg-green-500'
+                    : toast.type === 'error'
+                      ? 'bg-red-500'
+                      : 'bg-blue-500'
+                  }`}
+              />
+
+              <p className="text-sm font-medium flex-1">
+                {toast.message}
+              </p>
+
+              <button
+                onClick={() => setToast(null)}
+                className="text-current opacity-60 hover:opacity-100 text-lg"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 };

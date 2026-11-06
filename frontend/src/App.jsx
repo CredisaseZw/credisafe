@@ -13,6 +13,7 @@ import PersonManagement from './pages/PersonManagement';
 import CompanyManagement from './pages/CompanyManagement';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import PersonDetail from './pages/PersonDetail';
 
 function App() {
   return (
@@ -68,6 +69,12 @@ function App() {
           <Route path="/admin/persons" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <PersonManagement />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/persons/:id" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <PersonDetail />
             </ProtectedRoute>
           } />
 
