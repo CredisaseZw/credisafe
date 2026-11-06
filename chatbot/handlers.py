@@ -60,6 +60,7 @@ class MessageHandler:
         # Get or create person
         person, created = Person.objects.get_or_create(
             phone_number=from_number,
+            is_active=True,
             defaults={'user_mode': 'accepting_terms', 'user_status': 'national_id'}
         )
         if created or person.user_mode == 'accepting_terms':
@@ -117,6 +118,13 @@ class MessageHandler:
             self.whatsapp.send_message(
                 from_number,
                 f"Verification process started for {person.full_name}."
+            )
+            return
+        
+        if person and not person.is_active:
+            self.whatsapp.send_message(
+                from_number,
+                "Your account is currently inactive. Please contact support, 263715239711 for assistance."
             )
             return
         

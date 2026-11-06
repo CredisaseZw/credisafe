@@ -200,7 +200,7 @@ class Person(models.Model):
     name_match_score = models.FloatField(null=True, blank=True)
     phone_match_score = models.FloatField(null=True, blank=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
-    
+    is_active = models.BooleanField(default=True)
     is_auto_verified = models.BooleanField(default=False)
     needs_manual_review = models.BooleanField(default=False)
     id_verification_score = models.FloatField(null=True, blank=True)

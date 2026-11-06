@@ -6,31 +6,27 @@ import {
   PlusCircleIcon,
   PencilIcon,
   TrashIcon,
-  EyeIcon,
   XCircleIcon,
-  CheckCircleIcon,
   SearchIcon,
-  ShieldExclamationIcon,
-  ShieldCheckIcon,
-  PhotographIcon,
-  BanIcon,
-  RefreshIcon,
 } from '@heroicons/react/outline';
 
 const PersonManagement = () => {
   const [persons, setPersons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [manualReviewFilter, setManualReviewFilter] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingPerson, setEditingPerson] = useState(null);
   const [companies, setCompanies] = useState([]);
 
-  const [images, setImages] = useState([]);
-  const [showImagesModal, setShowImagesModal] = useState(false);
-  const [imagesLoading, setImagesLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [toast, setToast] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingPerson, setEditingPerson] = useState(null);
+
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  const [manualReviewFilter, setManualReviewFilter] = useState('all');
+
+  const [actionLoading, setActionLoading] = useState(null);
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -43,43 +39,17 @@ const PersonManagement = () => {
   });
 
   // --------------------------------------------------
-  // Toast notifications
-  // --------------------------------------------------
-
-  const showToast = (message, type = 'info') => {
-    setToast({
-      message,
-      type,
-      id: Date.now(),
-    });
-  };
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timeout = setTimeout(() => {
-      setToast(null);
-    }, 3500);
-
-    return () => clearTimeout(timeout);
-  }, [toast]);
-
-  // --------------------------------------------------
-  // Fetch persons and companies
+  // FETCH PERSONS AND COMPANIES
   // --------------------------------------------------
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-
     try {
       const params = {};
 
-      if (manualReviewFilter !== '') {
-        params.needs_manual_review = manualReviewFilter;
-      }
-
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim();
+      if (manualReviewFilter === 'review') {
+        params.needs_manual_review = 'true';
+      } else if (manualReviewFilter === 'verified') {
+        params.needs_manual_review = 'false';
       }
 
       const [personsRes, companiesRes] = await Promise.all([
@@ -96,7 +66,7 @@ const PersonManagement = () => {
       );
     } catch (error) {
       console.error('Error fetching data:', error);
-      showToast('Failed to load persons. Please try again.', 'error');
+      alert('Failed to fetch data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -106,13 +76,60 @@ const PersonManagement = () => {
     fetchData();
   }, [fetchData]);
 
+  // --------------------------------------------------
+  // SEARCH
+  // --------------------------------------------------
+
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchData();
+  };
+
+  const filteredPersons = persons.filter((person) => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return true;
+
+    return (
+      person.full_name?.toLowerCase().includes(query) ||
+      person.national_id?.toLowerCase().includes(query) ||
+      person.phone_number?.toLowerCase().includes(query)
+    );
+  });
+
+  // --------------------------------------------------
+  // INDIVIDUAL PERSON DETAILS
+  // --------------------------------------------------
+
+  const openPersonDetails = async (personId) => {
+    setDetailsLoading(true);
+    setShowDetailsModal(true);
+    setSelectedPerson(null);
+
+    try {
+      const response = await api.get(`/persons/${personId}/`);
+
+      setSelectedPerson(response.data);
+    } catch (error) {
+      console.error('Error loading person details:', error);
+
+      alert(
+        error.response?.data?.detail ||
+        'Failed to load person details.'
+      );
+
+      setShowDetailsModal(false);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedPerson(null);
   };
 
   // --------------------------------------------------
-  // Add person
+  // ADD PERSON
   // --------------------------------------------------
 
   const handleAddPerson = async (e) => {
@@ -130,25 +147,23 @@ const PersonManagement = () => {
 
       await api.post('/persons/', data);
 
-      showToast('Person added successfully.', 'success');
+      alert('Person added successfully!');
 
       setShowAddModal(false);
       resetForm();
-
-      await fetchData();
+      fetchData();
     } catch (error) {
       console.error('Error adding person:', error);
 
-      showToast(
+      alert(
         error.response?.data?.detail ||
-        'Failed to add person. Please try again.',
-        'error'
+        'Failed to add person. Please try again.'
       );
     }
   };
 
   // --------------------------------------------------
-  // Edit person
+  // EDIT PERSON
   // --------------------------------------------------
 
   const handleEditPerson = async (e) => {
@@ -166,237 +181,156 @@ const PersonManagement = () => {
 
       await api.put(`/persons/${editingPerson.id}/`, data);
 
-      showToast('Person updated successfully.', 'success');
+      alert('Person updated successfully!');
 
       setEditingPerson(null);
       resetForm();
-
-      await fetchData();
+      fetchData();
     } catch (error) {
       console.error('Error updating person:', error);
 
-      showToast(
+      alert(
         error.response?.data?.detail ||
-        'Failed to update person. Please try again.',
-        'error'
+        'Failed to update person. Please try again.'
       );
     }
   };
 
   // --------------------------------------------------
-  // Delete person
+  // DELETE PERSON
   // --------------------------------------------------
 
   const handleDeletePerson = async (personId) => {
-    if (!window.confirm('Are you sure you want to delete this person?')) {
-      return;
-    }
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this person?'
+    );
+
+    if (!confirmed) return;
 
     try {
       await api.delete(`/persons/${personId}/`);
 
-      showToast('Person deleted successfully.', 'success');
+      alert('Person deleted successfully!');
 
-      await fetchData();
+      fetchData();
     } catch (error) {
       console.error('Error deleting person:', error);
-      showToast('Failed to delete person.', 'error');
+
+      alert(
+        error.response?.data?.detail ||
+        'Failed to delete person.'
+      );
     }
   };
 
   // --------------------------------------------------
-  // Verify person
+  // VERIFY PERSON
   // --------------------------------------------------
 
-  const handleVerifyPerson = async (personId) => {
-    if (!window.confirm('Are you sure you want to verify this person?')) {
-      return;
-    }
+  const handleVerifyPerson = async (person) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to verify ${person.full_name || 'this person'}?`
+    );
+
+    if (!confirmed) return;
+
+    setActionLoading(`${person.id}-verify`);
 
     try {
-      await api.post(`/persons/${personId}/verify/`);
+      await api.post(`/persons/${person.id}/verify/`);
 
-      showToast('Person verified successfully.', 'success');
+      alert('Person verified successfully.');
 
       await fetchData();
+
+      // Refresh the details modal if this person is currently open.
+      if (selectedPerson?.id === person.id) {
+        await openPersonDetails(person.id);
+      }
     } catch (error) {
       console.error('Error verifying person:', error);
 
-      showToast(
+      alert(
         error.response?.data?.error ||
-        'Failed to verify person.',
-        'error'
+        'Failed to verify person.'
       );
+    } finally {
+      setActionLoading(null);
     }
   };
 
   // --------------------------------------------------
-  // Unverify person
+  // REJECT PERSON
   // --------------------------------------------------
 
-  const handleUnverifyPerson = async (personId) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to remove this person’s verification?'
-      )
-    ) {
-      return;
-    }
+  const handleRejectPerson = async (person) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to reject ${person.full_name || 'this person'}?`
+    );
+
+    if (!confirmed) return;
+
+    setActionLoading(`${person.id}-reject`);
 
     try {
-      await api.post(`/persons/${personId}/unverify/`);
+      await api.post(`/persons/${person.id}/reject/`);
 
-      showToast('Person verification removed successfully.', 'success');
-
-      await fetchData();
-    } catch (error) {
-      console.error('Error unverifying person:', error);
-
-      showToast(
-        error.response?.data?.error ||
-        'Failed to remove verification.',
-        'error'
-      );
-    }
-  };
-
-  // --------------------------------------------------
-  // Reject person
-  // --------------------------------------------------
-
-  const handleRejectPerson = async (personId) => {
-    if (!window.confirm('Are you sure you want to reject this person?')) {
-      return;
-    }
-
-    try {
-      await api.post(`/persons/${personId}/reject/`);
-
-      showToast('Person rejected successfully.', 'success');
+      alert('Person rejected successfully.');
 
       await fetchData();
+
+      if (selectedPerson?.id === person.id) {
+        await openPersonDetails(person.id);
+      }
     } catch (error) {
       console.error('Error rejecting person:', error);
 
-      showToast(
+      alert(
         error.response?.data?.error ||
-        'Failed to reject person.',
-        'error'
-      );
-    }
-  };
-
-  // --------------------------------------------------
-  // Activate person
-  // --------------------------------------------------
-
-  const handleActivatePerson = async (personId) => {
-    try {
-      await api.post(`/persons/${personId}/activate/`);
-
-      showToast('Person activated successfully.', 'success');
-
-      await fetchData();
-    } catch (error) {
-      console.error('Error activating person:', error);
-      showToast('Failed to activate person.', 'error');
-    }
-  };
-
-  // --------------------------------------------------
-  // Deactivate person
-  // --------------------------------------------------
-
-  const handleDeactivatePerson = async (personId) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to deactivate this person?'
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await api.post(`/persons/${personId}/deactivate/`);
-
-      showToast('Person deactivated successfully.', 'success');
-
-      await fetchData();
-    } catch (error) {
-      console.error('Error deactivating person:', error);
-      showToast('Failed to deactivate person.', 'error');
-    }
-  };
-
-  // --------------------------------------------------
-  // Block person
-  // --------------------------------------------------
-
-  const handleBlockPerson = async (personId) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to block this person?'
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await api.post(`/persons/${personId}/block/`);
-
-      showToast('Person blocked successfully.', 'success');
-
-      await fetchData();
-    } catch (error) {
-      console.error('Error blocking person:', error);
-
-      showToast(
-        error.response?.data?.error ||
-        'Failed to block person.',
-        'error'
-      );
-    }
-  };
-
-  // --------------------------------------------------
-  // View ID images
-  // --------------------------------------------------
-
-  const handleViewImages = async (personId) => {
-    setImagesLoading(true);
-
-    try {
-      const response = await api.get(
-        `/persons/${personId}/images/`
-      );
-
-      const personImages = response.data?.images || [];
-
-      if (personImages.length === 0) {
-        showToast(
-          'No ID images are available for this person.',
-          'info'
-        );
-
-        return;
-      }
-
-      setImages(personImages);
-      setShowImagesModal(true);
-    } catch (error) {
-      console.error('Error retrieving ID images:', error);
-
-      showToast(
-        'Unable to retrieve ID images. Please try again.',
-        'error'
+        'Failed to reject person.'
       );
     } finally {
-      setImagesLoading(false);
+      setActionLoading(null);
     }
   };
 
   // --------------------------------------------------
-  // Form helpers
+  // DEACTIVATE PERSON
+  // --------------------------------------------------
+
+  const handleDeactivatePerson = async (person) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to deactivate ${person.full_name || 'this person'}?`
+    );
+
+    if (!confirmed) return;
+
+    setActionLoading(`${person.id}-deactivate`);
+
+    try {
+      await api.post(`/persons/${person.id}/deactivate/`);
+
+      alert('Person deactivated successfully.');
+
+      await fetchData();
+
+      if (selectedPerson?.id === person.id) {
+        await openPersonDetails(person.id);
+      }
+    } catch (error) {
+      console.error('Error deactivating person:', error);
+
+      alert(
+        error.response?.data?.error ||
+        'Failed to deactivate person.'
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // --------------------------------------------------
+  // FORM HELPERS
   // --------------------------------------------------
 
   const resetForm = () => {
@@ -432,72 +366,90 @@ const PersonManagement = () => {
   };
 
   // --------------------------------------------------
-  // Render helpers
+  // STATUS HELPERS
   // --------------------------------------------------
 
   const getVerificationStatus = (person) => {
-    if (person.is_verified) {
-      return {
-        label: 'Verified',
-        className: 'bg-green-100 text-green-800',
-      };
-    }
-
     if (person.verification_status === 'rejected') {
       return {
         label: 'Rejected',
-        className: 'bg-red-100 text-red-800',
+        className: 'bg-red-100 text-red-700',
+      };
+    }
+
+    if (person.is_verified) {
+      return {
+        label: 'Verified',
+        className: 'bg-green-100 text-green-700',
       };
     }
 
     if (person.needs_manual_review) {
       return {
-        label: 'Manual Review',
-        className: 'bg-orange-100 text-orange-800',
+        label: 'Needs Review',
+        className: 'bg-orange-100 text-orange-700',
       };
     }
 
-    if (person.verification_status === 'hold') {
+    return {
+      label: 'Unverified',
+      className: 'bg-yellow-100 text-yellow-700',
+    };
+  };
+
+  const getAccountStatus = (person) => {
+    if (person.is_active === false) {
       return {
-        label: 'On Hold',
+        label: 'Deactivated',
         className: 'bg-gray-100 text-gray-700',
       };
     }
 
     return {
-      label: 'Pending',
-      className: 'bg-yellow-100 text-yellow-800',
+      label: 'Active',
+      className: 'bg-green-100 text-green-700',
     };
   };
 
-  const isPersonBlocked = (person) => {
+  // --------------------------------------------------
+  // DETAILS MODAL FIELD HELPER
+  // --------------------------------------------------
+
+  const DetailField = ({ label, value }) => {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      return null;
+    }
+
+    let displayValue = value;
+
+    if (typeof value === 'boolean') {
+      displayValue = value ? 'Yes' : 'No';
+    } else if (typeof value === 'object') {
+      displayValue = value.name || JSON.stringify(value);
+    }
+
     return (
-      person.user_mode === 'suspension' ||
-      person.user_status === 'hold'
+      <div className="border-b border-gray-100 py-3">
+        <p className="text-xs font-medium text-gray-500 mb-1">
+          {label}
+        </p>
+
+        <p className="text-sm text-gray-800 break-words">
+          {String(displayValue)}
+        </p>
+      </div>
     );
   };
 
-  const isPersonActive = (person) => {
-    return person.is_active !== false;
-  };
-
-  const filteredPersons = persons.filter((person) => {
-    if (!searchQuery.trim()) return true;
-
-    const query = searchQuery.toLowerCase();
-
-    return (
-      person.full_name?.toLowerCase().includes(query) ||
-      person.national_id?.toLowerCase().includes(query) ||
-      person.phone_number?.toLowerCase().includes(query)
-    );
-  });
-
   // --------------------------------------------------
-  // Loading screen
+  // LOADING SCREEN
   // --------------------------------------------------
 
-  if (loading && persons.length === 0) {
+  if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
         <AdminSidebar />
@@ -510,7 +462,7 @@ const PersonManagement = () => {
   }
 
   // --------------------------------------------------
-  // Main UI
+  // MAIN COMPONENT
   // --------------------------------------------------
 
   return (
@@ -519,7 +471,7 @@ const PersonManagement = () => {
 
       <div className="flex-1 ml-64 overflow-y-auto p-8">
 
-        {/* Header */}
+        {/* PAGE HEADER */}
 
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -530,13 +482,10 @@ const PersonManagement = () => {
             <h2 className="text-xl font-semibold text-gray-700 mt-1">
               Person Management
             </h2>
-
-            <p className="text-sm text-gray-500 mt-1">
-              Manage individual profiles, verification and account status.
-            </p>
           </div>
 
           <button
+            type="button"
             onClick={() => {
               resetForm();
               setShowAddModal(true);
@@ -548,12 +497,12 @@ const PersonManagement = () => {
           </button>
         </div>
 
-        {/* Search and filters */}
+        {/* SEARCH AND FILTER */}
 
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <form
             onSubmit={handleSearch}
-            className="flex flex-col lg:flex-row gap-4"
+            className="flex flex-col md:flex-row gap-4"
           >
             <div className="flex-1 relative">
               <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -563,64 +512,44 @@ const PersonManagement = () => {
                 placeholder="Search by name, national ID, or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <select
               value={manualReviewFilter}
               onChange={(e) => setManualReviewFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="border border-gray-300 rounded-lg px-4 py-2 bg-white"
             >
-              <option value="">All Persons</option>
-              <option value="true">
-                Requires Manual Review
-              </option>
-              <option value="false">
-                Does Not Require Manual Review
-              </option>
+              <option value="all">All People</option>
+              <option value="review">Needs Manual Review</option>
+              <option value="verified">Verified People</option>
             </select>
 
             <button
               type="submit"
-              className="btn-primary px-6 py-2 flex items-center justify-center gap-2"
+              className="btn-primary px-6 py-2"
             >
-              <SearchIcon className="w-4 h-4" />
               Search
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setManualReviewFilter('');
-              }}
-              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
-            >
-              Clear
             </button>
           </form>
         </div>
 
-        {/* Results summary */}
-
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-sm text-gray-600">
-            Showing <strong>{filteredPersons.length}</strong> person(s)
-          </p>
-
-          <button
-            onClick={fetchData}
-            className="text-sm text-primary hover:text-blue-800 flex items-center gap-2"
-          >
-            <RefreshIcon className="w-4 h-4" />
-            Refresh
-          </button>
-        </div>
-
-        {/* Persons table */}
+        {/* PERSONS TABLE */}
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold text-gray-800">
+                People
+              </h3>
+
+              <p className="text-sm text-gray-500 mt-1">
+                {filteredPersons.length} people found
+              </p>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -636,155 +565,130 @@ const PersonManagement = () => {
 
               <tbody className="divide-y divide-gray-200">
                 {filteredPersons.map((person) => {
-                  const verification = getVerificationStatus(person);
-                  const blocked = isPersonBlocked(person);
-                  const active = isPersonActive(person);
+                  const verificationStatus =
+                    getVerificationStatus(person);
+
+                  const accountStatus =
+                    getAccountStatus(person);
+
+                  const isActionLoading =
+                    actionLoading?.startsWith(`${person.id}-`);
+
+                  const canVerifyOrReject =
+                    !person.is_verified &&
+                    person.verification_status !== 'rejected';
 
                   return (
                     <tr
                       key={person.id}
                       className="hover:bg-gray-50"
                     >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-800">
-                          {person.full_name || 'Unknown'}
-                        </div>
+                      {/* NAME - OPENS DETAILS */}
 
-                        {person.needs_manual_review && (
-                          <span className="text-xs text-orange-600 font-medium">
-                            Requires manual review
-                          </span>
-                        )}
+                      <td className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => openPersonDetails(person.id)}
+                          className="text-primary hover:underline font-semibold text-left"
+                        >
+                          {person.full_name || 'Unknown'}
+                        </button>
                       </td>
 
+                      {/* NATIONAL ID - OPENS DETAILS */}
+
                       <td className="px-4 py-3 text-sm font-mono">
-                        {person.national_id || '-'}
+                        <button
+                          type="button"
+                          onClick={() => openPersonDetails(person.id)}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {person.national_id || '-'}
+                        </button>
                       </td>
 
                       <td className="px-4 py-3 text-sm">
                         {person.phone_number || '-'}
                       </td>
 
+                      {/* VERIFICATION STATUS */}
+
                       <td className="px-4 py-3">
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${verification.className}`}
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${verificationStatus.className}`}
                         >
-                          {verification.label}
+                          {verificationStatus.label}
                         </span>
                       </td>
 
+                      {/* ACCOUNT STATUS */}
+
                       <td className="px-4 py-3">
-                        {blocked ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Blocked
-                          </span>
-                        ) : active ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                            Inactive
-                          </span>
-                        )}
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${accountStatus.className}`}
+                        >
+                          {accountStatus.label}
+                        </span>
                       </td>
 
+                      {/* ACTIONS */}
+
                       <td className="px-4 py-3">
-                        <div className="flex justify-center items-center gap-3 flex-wrap">
+                        <div className="flex justify-center items-center gap-2 flex-wrap">
 
-                          {/* View ID images */}
+                          {canVerifyOrReject && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={isActionLoading}
+                                onClick={() => handleVerifyPerson(person)}
+                                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
+                              >
+                                {actionLoading === `${person.id}-verify`
+                                  ? 'Verifying...'
+                                  : 'Verify'}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isActionLoading}
+                                onClick={() => handleRejectPerson(person)}
+                                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                              >
+                                {actionLoading === `${person.id}-reject`
+                                  ? 'Rejecting...'
+                                  : 'Reject'}
+                              </button>
+                            </>
+                          )}
+
+                          {person.is_active !== false && (
+                            <button
+                              type="button"
+                              disabled={isActionLoading}
+                              onClick={() => handleDeactivatePerson(person)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-md bg-orange-100 text-orange-700 hover:bg-orange-200 disabled:opacity-50"
+                            >
+                              {actionLoading === `${person.id}-deactivate`
+                                ? 'Deactivating...'
+                                : 'Deactivate'}
+                            </button>
+                          )}
 
                           <button
-                            onClick={() => handleViewImages(person.id)}
-                            disabled={imagesLoading}
-                            className="text-purple-600 hover:text-purple-800 disabled:opacity-50"
-                            title="View ID Images"
-                          >
-                            <PhotographIcon className="w-5 h-5" />
-                          </button>
-
-                          {/* Verify / Unverify */}
-
-                          {person.is_verified ? (
-                            <button
-                              onClick={() => handleUnverifyPerson(person.id)}
-                              className="text-orange-600 hover:text-orange-800"
-                              title="Unverify"
-                            >
-                              <XCircleIcon className="w-5 h-5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleVerifyPerson(person.id)}
-                              className="text-green-600 hover:text-green-800"
-                              title="Verify"
-                            >
-                              <CheckCircleIcon className="w-5 h-5" />
-                            </button>
-                          )}
-
-                          {/* Reject */}
-
-                          {person.verification_status !== 'rejected' && (
-                            <button
-                              onClick={() => handleRejectPerson(person.id)}
-                              className="text-red-600 hover:text-red-800"
-                              title="Reject"
-                            >
-                              <XCircleIcon className="w-5 h-5" />
-                            </button>
-                          )}
-
-                          {/* Activate / Deactivate */}
-
-                          {active ? (
-                            <button
-                              onClick={() => handleDeactivatePerson(person.id)}
-                              className="text-orange-600 hover:text-orange-800 text-xs font-semibold"
-                              title="Deactivate"
-                            >
-                              Deactivate
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleActivatePerson(person.id)}
-                              className="text-green-600 hover:text-green-800 text-xs font-semibold"
-                              title="Activate"
-                            >
-                              Activate
-                            </button>
-                          )}
-
-                          {/* Block */}
-
-                          {!blocked && (
-                            <button
-                              onClick={() => handleBlockPerson(person.id)}
-                              className="text-red-700 hover:text-red-900"
-                              title="Block"
-                            >
-                              <BanIcon className="w-5 h-5" />
-                            </button>
-                          )}
-
-                          {/* Edit */}
-
-                          <button
+                            type="button"
                             onClick={() => openEditModal(person)}
-                            className="text-blue-600 hover:text-blue-800"
-                            title="Edit"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200"
                           >
-                            <PencilIcon className="w-5 h-5" />
+                            Edit
                           </button>
 
-                          {/* Delete */}
-
                           <button
+                            type="button"
                             onClick={() => handleDeletePerson(person.id)}
-                            className="text-red-600 hover:text-red-800"
-                            title="Delete"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
                           >
-                            <TrashIcon className="w-5 h-5" />
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -796,273 +700,470 @@ const PersonManagement = () => {
           </div>
 
           {filteredPersons.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 font-medium">
-                No persons found
-              </p>
-
-              <p className="text-gray-400 text-sm mt-1">
-                Try changing your search or filter criteria.
+            <div className="text-center py-10">
+              <p className="text-gray-500">
+                No people found.
               </p>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Add / Edit modal */}
+      {/* --------------------------------------------------
+                ADD / EDIT PERSON MODAL
+            -------------------------------------------------- */}
 
-        {(showAddModal || editingPerson) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+      {(showAddModal || editingPerson) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
 
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-800">
-                    {editingPerson ? 'Edit Person' : 'Add New Person'}
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-1">
-                    Enter the person's information below.
-                  </p>
-                </div>
-
-                <button
-                  onClick={closeFormModal}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XCircleIcon className="w-6 h-6" />
-                </button>
-              </div>
-
-              <form
-                onSubmit={
-                  editingPerson
-                    ? handleEditPerson
-                    : handleAddPerson
-                }
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                  <div>
-                    <label className="label-text">
-                      Full Name *
-                    </label>
-
-                    <input
-                      type="text"
-                      value={formData.full_name}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          full_name: e.target.value,
-                        })
-                      }
-                      className="input-field"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label-text">
-                      National ID *
-                    </label>
-
-                    <input
-                      type="text"
-                      value={formData.national_id}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          national_id: e.target.value,
-                        })
-                      }
-                      className="input-field"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label-text">
-                      Phone Number *
-                    </label>
-
-                    <input
-                      type="text"
-                      value={formData.phone_number}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          phone_number: e.target.value,
-                        })
-                      }
-                      className="input-field"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label-text">
-                      Company
-                    </label>
-
-                    <select
-                      value={formData.company_id}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          company_id: e.target.value,
-                        })
-                      }
-                      className="input-field"
-                    >
-                      <option value="">
-                        No Company
-                      </option>
-
-                      {companies.map((company) => (
-                        <option
-                          key={company.id}
-                          value={company.id}
-                        >
-                          {company.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="label-text">
-                      Address
-                    </label>
-
-                    <input
-                      type="text"
-                      value={formData.address}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          address: e.target.value,
-                        })
-                      }
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6 pt-4 border-t">
-                  <button
-                    type="submit"
-                    className="flex-1 btn-primary py-2 font-semibold"
-                  >
-                    {editingPerson
-                      ? 'Update Person'
-                      : 'Add Person'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={closeFormModal}
-                    className="flex-1 btn-secondary py-2 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ID Images modal */}
-
-        {showImagesModal && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4"
-            onClick={() => setShowImagesModal(false)}
-          >
-            <div
-              className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">
-                    Identification Images
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-1">
-                    {images.length} image(s) available
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setShowImagesModal(false)}
-                  className="text-gray-500 hover:text-gray-800"
-                >
-                  <XCircleIcon className="w-7 h-7" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {images.map((image, index) => (
-                  <div
-                    key={image.filename || index}
-                    className="border border-gray-200 rounded-xl overflow-hidden"
-                  >
-                    <div className="bg-gray-50 flex items-center justify-center min-h-[250px]">
-                      <img
-                        src={image.url}
-                        alt={`Identification ${index + 1}`}
-                        className="w-full max-h-[450px] object-contain"
-                      />
-                    </div>
-
-                    <div className="p-3 border-t">
-                      <p className="text-sm text-gray-600 truncate">
-                        {image.filename || `Image ${index + 1}`}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Toast notification */}
-
-        {toast && (
-          <div className="fixed top-6 right-6 z-[100] animate-fade-in">
-            <div
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-xl border max-w-sm ${toast.type === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-800'
-                  : toast.type === 'error'
-                    ? 'bg-red-50 border-red-200 text-red-800'
-                    : 'bg-white border-gray-200 text-gray-700'
-                }`}
-            >
-              <div
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${toast.type === 'success'
-                    ? 'bg-green-500'
-                    : toast.type === 'error'
-                      ? 'bg-red-500'
-                      : 'bg-blue-500'
-                  }`}
-              />
-
-              <p className="text-sm font-medium flex-1">
-                {toast.message}
-              </p>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {editingPerson ? 'Edit Person' : 'Add New Person'}
+              </h2>
 
               <button
-                onClick={() => setToast(null)}
-                className="text-current opacity-60 hover:opacity-100 text-lg"
+                type="button"
+                onClick={closeFormModal}
+                className="text-gray-400 hover:text-gray-600"
               >
-                ×
+                <XCircleIcon className="w-6 h-6" />
               </button>
             </div>
-          </div>
-        )}
 
-      </div>
+            <form
+              onSubmit={
+                editingPerson
+                  ? handleEditPerson
+                  : handleAddPerson
+              }
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <div>
+                  <label className="label-text">
+                    Full Name *
+                  </label>
+
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        full_name: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="label-text">
+                    National ID *
+                  </label>
+
+                  <input
+                    type="text"
+                    value={formData.national_id}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        national_id: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="label-text">
+                    Phone Number *
+                  </label>
+
+                  <input
+                    type="text"
+                    value={formData.phone_number}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        phone_number: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="label-text">
+                    Company
+                  </label>
+
+                  <select
+                    value={formData.company_id}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        company_id: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                  >
+                    <option value="">No Company</option>
+
+                    {companies.map((company) => (
+                      <option
+                        key={company.id}
+                        value={company.id}
+                      >
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="label-text">
+                    Address
+                  </label>
+
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6 pt-4 border-t">
+                <button
+                  type="submit"
+                  className="flex-1 btn-primary py-2 font-semibold"
+                >
+                  {editingPerson
+                    ? 'Update Person'
+                    : 'Add Person'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeFormModal}
+                  className="flex-1 btn-secondary py-2 font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------
+                INDIVIDUAL PERSON DETAILS MODAL
+            -------------------------------------------------- */}
+
+      {showDetailsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+
+            {/* DETAILS HEADER */}
+
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex justify-between items-center z-10">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">
+                  Person Details
+                </h2>
+
+                {selectedPerson && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedPerson.full_name || 'Person'}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={closeDetailsModal}
+                className="text-gray-400 hover:text-gray-700"
+              >
+                <XCircleIcon className="w-7 h-7" />
+              </button>
+            </div>
+
+            {/* DETAILS CONTENT */}
+
+            <div className="p-6">
+
+              {detailsLoading && (
+                <div className="flex justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                </div>
+              )}
+
+              {!detailsLoading && selectedPerson && (
+                <>
+                  {/* PERSON SUMMARY */}
+
+                  <div className="bg-gray-50 rounded-xl p-5 mb-6">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800">
+                          {selectedPerson.full_name || 'Unknown'}
+                        </h3>
+
+                        <p className="text-sm text-gray-500 mt-1">
+                          National ID: {selectedPerson.national_id || '-'}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getVerificationStatus(selectedPerson).className}`}
+                        >
+                          {getVerificationStatus(selectedPerson).label}
+                        </span>
+
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getAccountStatus(selectedPerson).className}`}
+                        >
+                          {getAccountStatus(selectedPerson).label}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PERSONAL INFORMATION */}
+
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                      Personal Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <DetailField
+                        label="Full Name"
+                        value={selectedPerson.full_name}
+                      />
+
+                      <DetailField
+                        label="National ID"
+                        value={selectedPerson.national_id}
+                      />
+
+                      <DetailField
+                        label="Date of Birth"
+                        value={selectedPerson.date_of_birth}
+                      />
+
+                      <DetailField
+                        label="Gender"
+                        value={selectedPerson.gender}
+                      />
+
+                      <DetailField
+                        label="Address"
+                        value={selectedPerson.address}
+                      />
+
+                      <DetailField
+                        label="Phone Number"
+                        value={selectedPerson.phone_number}
+                      />
+
+                      <DetailField
+                        label="Email"
+                        value={selectedPerson.email}
+                      />
+                    </div>
+                  </div>
+
+                  {/* COMPANY INFORMATION */}
+
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                      Company Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <DetailField
+                        label="Company"
+                        value={selectedPerson.company}
+                      />
+
+                      <DetailField
+                        label="Company ID"
+                        value={selectedPerson.company_id}
+                      />
+                    </div>
+                  </div>
+
+                  {/* VERIFICATION INFORMATION */}
+
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                      Verification Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <DetailField
+                        label="Verified"
+                        value={selectedPerson.is_verified}
+                      />
+
+                      <DetailField
+                        label="Verification Status"
+                        value={selectedPerson.verification_status}
+                      />
+
+                      <DetailField
+                        label="Needs Manual Review"
+                        value={selectedPerson.needs_manual_review}
+                      />
+
+                      <DetailField
+                        label="Automatically Verified"
+                        value={selectedPerson.is_auto_verified}
+                      />
+
+                      <DetailField
+                        label="Verification Method"
+                        value={selectedPerson.id_verification_method}
+                      />
+
+                      <DetailField
+                        label="Verification Score"
+                        value={selectedPerson.id_verification_score}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ACCOUNT INFORMATION */}
+
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                      Account Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <DetailField
+                        label="Active"
+                        value={selectedPerson.is_active}
+                      />
+
+                      <DetailField
+                        label="User Mode"
+                        value={selectedPerson.user_mode}
+                      />
+
+                      <DetailField
+                        label="User Status"
+                        value={selectedPerson.user_status}
+                      />
+
+                      <DetailField
+                        label="Created At"
+                        value={selectedPerson.created_at}
+                      />
+
+                      <DetailField
+                        label="Last Updated"
+                        value={selectedPerson.updated_at}
+                      />
+                    </div>
+                  </div>
+
+                  {/* OTHER FIELDS RETURNED BY DETAIL SERIALIZER */}
+
+                  <div className="mb-4">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                      Additional Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      {Object.entries(selectedPerson)
+                        .filter(([key, value]) => {
+                          const displayedFields = [
+                            'id',
+                            'full_name',
+                            'national_id',
+                            'date_of_birth',
+                            'gender',
+                            'address',
+                            'phone_number',
+                            'email',
+                            'company',
+                            'company_id',
+                            'is_verified',
+                            'verification_status',
+                            'needs_manual_review',
+                            'is_auto_verified',
+                            'id_verification_method',
+                            'id_verification_score',
+                            'is_active',
+                            'user_mode',
+                            'user_status',
+                            'created_at',
+                            'updated_at',
+                          ];
+
+                          return (
+                            !displayedFields.includes(key) &&
+                            value !== null &&
+                            value !== undefined &&
+                            value !== ''
+                          );
+                        })
+                        .map(([key, value]) => (
+                          <DetailField
+                            key={key}
+                            label={key
+                              .replace(/_/g, ' ')
+                              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                            value={value}
+                          />
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* DETAILS FOOTER ACTIONS */}
+
+                  <div className="flex justify-end gap-3 border-t pt-5 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeDetailsModal();
+                        openEditModal(selectedPerson);
+                      }}
+                      className="btn-primary px-5 py-2"
+                    >
+                      Edit Person
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={closeDetailsModal}
+                      className="btn-secondary px-5 py-2"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

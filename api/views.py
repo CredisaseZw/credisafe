@@ -421,9 +421,16 @@ class PersonViewSet(viewsets.ModelViewSet):
         needs_manual_review = self.request.query_params.get(
             'needs_manual_review'
         )
-        if needs_manual_review in ['true', 'false']:
+
+        if needs_manual_review == 'true':
             queryset = queryset.filter(
-                needs_manual_review=(needs_manual_review == 'true')
+                Q(needs_manual_review=True) | Q(is_verified=False)
+            ).distinct()
+
+        elif needs_manual_review == 'false':
+            queryset = queryset.filter(
+                needs_manual_review=False,
+                is_verified=True
             )
 
 
@@ -574,6 +581,7 @@ class PersonViewSet(viewsets.ModelViewSet):
             })
 
         except Exception as error:
+            print(f"Error retrieving images for person {person.id}: {error}")
             return Response({
                 'error': 'Could not retrieve person images',
                 'details': str(error)
