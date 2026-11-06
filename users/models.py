@@ -89,6 +89,7 @@ class Person(models.Model):
     )
     # User mode and status tracking
     USER_MODES = [
+        ('accepting_terms', 'Accepting Terms'),
         ('signup', 'Signup Mode'),
         ('borrower_signup', 'Borrower Signup Mode'),
         ('login', 'Login Mode'),

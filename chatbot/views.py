@@ -69,12 +69,12 @@ def whatsapp_webhook(request):
                 # --- IMAGE MESSAGES ---
                 elif message_type == 'image':
                     image_data = message.get('image', {})
-                    media_url = image_data.get('url')
-                    print("Image URL:", media_url)
+                    from .whatsapp_client import WhatsAppClient
+                    media_id = image_data.get('id')
+                    media_url = WhatsAppClient().download_whapi_image(media_id, from_number) if media_id else None
                     media_caption = image_data.get('caption', '')
                     # Set message text to indicate it's an image
                     message_text = f"[Image]{' - ' + media_caption if media_caption else ''}"
-                    logger.info(f"Image message from {from_number}: {media_caption or 'no caption'}")
                 
                 # --- VIDEO MESSAGES ---
                 elif message_type == 'video':

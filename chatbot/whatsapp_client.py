@@ -436,14 +436,18 @@ class WhatsAppClient:
             logger.error(f"Alternative send error: {str(e)}")
             return None
     
-    def send_interactive_buttons(self, to_number, text, buttons, header_text=None, footer_text=None):
+    def send_interactive_buttons(self, to_number, text, buttons =None, header_text=None, footer_text=None):
         """
         Send interactive button message using CORRECT WHAPI format
         buttons: List of dicts with 'id' and 'title' keys (max 3)
         """
         try:
             to_number = self._clean_phone_number(to_number)
-                
+            if not buttons:
+                buttons =[
+                    {'id': 'back', 'title': 'Back'},
+                    {'id': 'exit', 'title': 'Exit'}
+                ]
             # Build the payload using CORRECT WHAPI format
             payload = {
                 "to": to_number,
@@ -495,8 +499,8 @@ class WhatsAppClient:
         self,
         to_number: str,
         body_text: str,
-        button_text: str,
         sections: List[Dict[str, Any]],
+        button_text: str = "Select",
         header_text: Optional[str] = None,
         footer_text: Optional[str] = None,
     ) -> bool:
@@ -873,3 +877,24 @@ class WhatsAppClient:
         except Exception as e:
             logger.error(f"Template message error: {str(e)}")
             return False
+
+    def download_whapi_image(self, media_id,from_number):
+            
+        import requests
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+        url = f"{self.base_url}/media/{media_id}"
+
+        headers =self.headers
+
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        filename = f"whatsapp_images/{from_number}_{media_id}.jpg"
+
+        saved_path = default_storage.save(
+            filename,
+            ContentFile(response.content)
+        )
+
+        return default_storage.url(saved_path)

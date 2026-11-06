@@ -201,3 +201,23 @@ class Receipt(models.Model):
     
     def __str__(self):
         return f"Receipt for {self.lending_contract} - Amount: {self.amount} - Confirmed: {self.confirmed}"
+class ServiceFee(models.Model):
+    service_choices = [
+        ('credit_check', 'Credit Check Fee'),
+        ('credit_activation_fee', 'Credit Activation Fee'),
+        ('statement_fee', 'Statement Fee'),
+        ('other', 'Other Service Fee'),
+    ]
+    service_type = models.CharField(max_length=30, choices=service_choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=5, choices=[
+        ('rand', 'ZAR'),
+        ('usd', 'USD'),
+        ('zwl', 'ZWL'),
+    ], default='usd')
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.service_type} - {self.amount} {self.currency}"

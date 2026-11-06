@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db.models import Sum, Count, Q, F, Avg
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth import get_user_model
@@ -30,6 +31,7 @@ from .serializers import (
     ConversationSessionSerializer,
     DashboardStatsSerializer, EnquiriesSerializer
 )
+from django.core.files.storage import default_storage
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -381,11 +383,11 @@ class PersonViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
-        
+
         # If user is a client user, only show persons from their company
         # if user.is_client_user and user.company:
         #     queryset = queryset.filter(company=user.company)
-        
+
         # Search filter - single search box for multiple fields
         search = self.request.query_params.get('search')
         if search:
@@ -394,37 +396,90 @@ class PersonViewSet(viewsets.ModelViewSet):
                 Q(national_id__icontains=search) |
                 Q(phone_number__icontains=search)
             )
-        
-        # Filter by phone number (legacy)
-        phone = self.request.query_params.get('phone')
-        if phone:
+
+        if phone := self.request.query_params.get('phone'):
             queryset = queryset.filter(phone_number__icontains=phone)
-        
+
         # Filter by full name (legacy)
         name = self.request.query_params.get('name')
         if name:
             queryset = queryset.filter(full_name__icontains=name)
-        
+
         # Filter by national_id (legacy)
         national_id = self.request.query_params.get('national_id')
         if national_id:
             queryset = queryset.filter(national_id__icontains=national_id)
-        
+
+        # Automatic verification
+        is_auto_verified = self.request.query_params.get('is_auto_verified')
+        if is_auto_verified in ['true', 'false']:
+            queryset = queryset.filter(
+                is_auto_verified=(is_auto_verified == 'true')
+            )
+
+        # Manual review
+        needs_manual_review = self.request.query_params.get(
+            'needs_manual_review'
+        )
+        if needs_manual_review in ['true', 'false']:
+            queryset = queryset.filter(
+                needs_manual_review=(needs_manual_review == 'true')
+            )
+
+
         # Filter by verification status
         verification = self.request.query_params.get('verification_status')
         if verification:
             queryset = queryset.filter(verification_status=verification)
-        
+
         # Filter by company
         company_id = self.request.query_params.get('company')
         if company_id:
             queryset = queryset.filter(company_id=company_id)
-        
+
         # Filter by is_verified
         is_verified = self.request.query_params.get('is_verified')
         if is_verified and is_verified.lower() == 'true':
             queryset = queryset.filter(is_verified=True)
-        
+
+        # ID verification score
+        min_score = self.request.query_params.get('min_score')
+        max_score = self.request.query_params.get('max_score')
+
+        if min_score:
+            try:
+                queryset = queryset.filter(
+                    id_verification_score__gte=float(min_score)
+                )
+            except ValueError:
+                pass
+
+        if max_score:
+            try:
+                queryset = queryset.filter(
+                    id_verification_score__lte=float(max_score)
+                )
+            except ValueError:
+                pass
+
+        # Date range
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+
+        if date_from:
+            parsed_date = parse_date(date_from)
+            if parsed_date:
+                queryset = queryset.filter(
+                    created_at__date__gte=parsed_date
+                )
+
+        if date_to:
+            parsed_date = parse_date(date_to)
+            if parsed_date:
+                queryset = queryset.filter(
+                    created_at__date__lte=parsed_date
+                )
+
         return queryset
     
     @action(detail=True, methods=['post'])
@@ -438,10 +493,93 @@ class PersonViewSet(viewsets.ModelViewSet):
         
         person = self.get_object()
         person.is_verified = True
+        person.needs_manual_review = False
         person.verification_status = 'verified'
         person.save()
         
         return Response(PersonSerializer(person).data)
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve a person after manual review."""
+
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Only superusers can approve persons'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        person = self.get_object()
+
+        person.is_verified = True
+        person.verification_status = 'verified'
+        person.needs_manual_review = False
+        person.id_verification_method = 'manual'
+
+        person.save(update_fields=[
+            'is_verified',
+            'verification_status',
+            'needs_manual_review',
+            'id_verification_method',
+            'updated_at'
+        ])
+
+        return Response(PersonSerializer(person).data)
+    
+    @action(detail=True, methods=['get'])
+    def images(self, request, pk=None):
+        """
+        Get WhatsApp images belonging to a person.
+        Matches images using the person's phone number.
+        """
+        person = self.get_object()
+
+        if not person.phone_number:
+            return Response({
+                'person_id': person.id,
+                'images': []
+            })
+
+        folder = 'whatsapp_images'
+
+        try:
+            _, files = default_storage.listdir(folder)
+
+            # Match the exact phone-number prefix.
+            prefix = f"{person.phone_number}_"
+
+            matching_files = [
+                filename for filename in files
+                if filename.startswith(prefix)
+                and filename.lower().endswith(
+                    ('.jpg', '.jpeg', '.png', '.webp')
+                )
+            ]
+
+            images = []
+
+            for filename in sorted(matching_files):
+                file_path = f"{folder}/{filename}"
+
+                images.append({
+                    'filename': filename,
+                    'url': default_storage.url(file_path)
+                })
+
+            return Response({
+                'person_id': person.id,
+                'phone_number': person.phone_number,
+                'total_images': len(images),
+                'images': images
+            })
+
+        except Exception as error:
+            return Response({
+                'error': 'Could not retrieve person images',
+                'details': str(error)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    
     
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):

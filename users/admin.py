@@ -5,7 +5,7 @@ from .models import Person, User
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
     list_display = (
-        'phone_number', 'full_name', 'national_id',
+        'phone_number', 'full_name', 'national_id','user_status','user_mode',
         'is_auto_verified', 'needs_manual_review',
         'id_verification_score', 'verification_status',
     )

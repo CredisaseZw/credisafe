@@ -147,7 +147,7 @@ class PersonSerializer(serializers.ModelSerializer):
             'id', 'phone_number', 'national_id', 'full_name',
             'address', 'credit_score', 'is_verified', 
             'verification_status', 'verification_status_display',
-            'company', 'company_id', 'user_mode', 'user_status',
+            'company', 'company_id', 'user_mode', 'user_status',"needs_manual_review",
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

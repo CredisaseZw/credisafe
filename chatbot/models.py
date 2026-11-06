@@ -12,6 +12,7 @@ class WhatsAppMessage(models.Model):
     direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES)
     message_type = models.CharField(max_length=50, default='text')
     content = models.TextField()
+    user_current_mode = models.CharField(max_length=50, null=True, blank=True)
     whatsapp_message_id = models.CharField(max_length=100, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     

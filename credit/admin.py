@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CreditHistory, CreditCheck, LendingContract, CreditCheckAudit, Receipt
+from .models import CreditHistory, CreditCheck, LendingContract, CreditCheckAudit, Receipt, ServiceFee
 
 
 @admin.register(Receipt)
@@ -86,3 +86,9 @@ class CreditCheckAuditAdmin(admin.ModelAdmin):
     list_display = ['credit_check', 'action', 'performed_by_phone', 'created_at']
     list_filter = ['action']
     search_fields = ['performed_by_phone']
+
+@admin.register(ServiceFee)
+class ServiceFeeAdmin(admin.ModelAdmin):
+    list_display = ['service_type', 'amount', 'currency', 'created_at']
+    list_filter = ['service_type', 'currency']
+    search_fields = ['service_type']
