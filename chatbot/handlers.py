@@ -2575,9 +2575,13 @@ class MessageHandler:
         return True
     
     def format_credit_report(self, person, credit_history, is_self_check=""):
+        from urllib.parse import quote
         """Format credit report for display"""
         score = person.credit_score or 0
-        if score >= 800:
+        if person.oldest_creditor:
+            risk = "High Risk-Upper"
+            emoji = "🔴"
+        elif score >= 800:
             risk = "High Risk-Upper"
             emoji = "🔴"
         elif score >= 600:
@@ -2598,14 +2602,31 @@ class MessageHandler:
         
         report = f"*{is_self_check}Payment Status Report*\n\n"
         report += f"*{person.national_id} -{person.full_name or 'N/A'}*\n\n"
-        report += f"*Listed Address:*\n\t{person.address}\n"
+        report += f"*Listed Address:*\n\t{person.address}\n\n"
         report += f"*Status -* {risk} {emoji}\n"
         report += f"*Active Credit  -* {active_credit_histories}\n"
         report += f"*In Arrears  -* {defaulted_loans_taken}"
         
-        # if person.oldest_creditor:
-        #     report += f"\n🏦 *Highest Creditor:* {person.oldest_creditor}\n"
-        #     report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
+        if person.oldest_creditor:
+            report += f"\n🏦 *Oldest Creditor:* {person.oldest_creditor}\n"
+            report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
+            report +=f"To clear your name"
+            whatsapp_message = (
+                f"Hi, I'm {person.full_name or 'N/A'}, "
+                f"ID Number: {person.national_id}. "
+                "I have checked my credit status and would like "
+                "assistance with clearing my name. "
+                "Please guide me through the process. Thank you."
+            )
+
+            whatsapp_number = "263715239711"
+
+            whatsapp_link = (
+                f"https://wa.me/{whatsapp_number}"
+                f"?text={quote(whatsapp_message)}"
+            )
+
+            report += f"\n\n📲 *To clear your name:*\n{whatsapp_link}"
         
         return report
     
