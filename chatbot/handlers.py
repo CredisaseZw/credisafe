@@ -2373,7 +2373,7 @@ class MessageHandler:
         user_name = person.full_name or "there"
         person_loans = LendingContract.objects.filter(borrower=person, status='active')
         if not welcome_message:
-            welcome_message = f"Welcome {user_name} \n\n"
+            welcome_message = f"*WELCOME {user_name}*\n\n"
 
             # ---------------------------------------------------------
             # CREDIT SCORE / PAYMENT STATUS
@@ -2568,13 +2568,19 @@ class MessageHandler:
             # WELCOME MESSAGE
             # ---------------------------------------------------------
             welcome_message += (
+                "*Your Credit Status*:\n"
+                "-------------------------\n\n"
                 f"{code} {payment_status}\n\n"
-                f"Net Status\n\n"
+                f"*Net Status*\n"
+                "-------------\n\n"
                 f"*Credit Owing - Total*\n"
+                "-------------------------\n"
                 f"\t{credit_taken_display}\n\n"
                 f"*Credit Owing - Overdue*\n"
+                "--------------------------\n"
                 f"\t{owing_display}\n\n"
                 f"*Credit Given*\n"
+                "--------------------------\n"
                 f"\t{credit_given_display}\n\n"
                 f"Options:\n"
             )
@@ -2601,8 +2607,8 @@ class MessageHandler:
             to_number=person.phone_number,
             text=welcome_message,
             buttons=buttons,
-            header_text="*Your Credit Status*:",
-            footer_text="send `help` for usage instructions"
+            header_text=None,
+            footer_text="reply with *help* for usage instructions"
             
         )
 
