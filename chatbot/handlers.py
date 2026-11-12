@@ -1605,11 +1605,11 @@ class MessageHandler:
                 if api_data:
                     self.handle_existing_borrower(person, api_data, nid, borrower_ob)
                 if not borrower_ob.is_verified and borrower_ob.address:
-                    response = f"This person is not yet verified, wait for verification updates\nRegards,\nCrediSafe"
+                    response = "This person is not yet verified, wait for verification updates\nRegards,\nCrediSafe"
                     self.whatsapp.send_message(person.phone_number, response)
                     return True
                 if person.verification_status == 'rejected':
-                    response = f"This person rejected using CrediSafe services."
+                    response = "This person rejected using CrediSafe services."
                     self.whatsapp.send_message(person.phone_number, response)
                     return True
                 if person.get_session_key('direct_lending'):
