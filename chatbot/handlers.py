@@ -2382,7 +2382,7 @@ class MessageHandler:
             if person.oldest_creditor:
                 code = "High Risk-Upper"
                 payment_status = "🔴"
-            if credit_score >= 800:
+            elif credit_score >= 800:
                 payment_status = "🔴"
                 code = "High Risk-Upper"
 
