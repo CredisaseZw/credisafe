@@ -819,7 +819,7 @@ class MessageHandler:
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"*Creditor Info*\n"
                 f"Creditor: {person.oldest_creditor}\n"
-                f"💰 Amount: {person.currency} {person.amount_owed:,.2f}\n"
+                f"💰 Amount: {person.currency} {float(person.amount_owed):.2f}\n"
             )
 
         message += (
@@ -2543,7 +2543,7 @@ class MessageHandler:
             )
             if owing_display =='-' and person.oldest_creditor:
                 owing_display = (
-                    f"{person.currency} {person.amount_owed:,.2f}"
+                    f"{person.currency} {float(person.amount_owed):.2f}"
                 )
 
             credit_given_display = format_currency_totals(
@@ -2565,7 +2565,7 @@ class MessageHandler:
                     )
                 if person.oldest_creditor:
                     credit_taken_display = (
-                        f"{person.currency} {person.amount_owed:,.2f}"
+                        f"{person.currency} {float(person.amount_owed):.2f}"
                     )
 
             # ---------------------------------------------------------
@@ -2652,7 +2652,7 @@ class MessageHandler:
         
         if person.oldest_creditor:
             report += f"\n🏦 *Oldest Creditor:* {person.oldest_creditor}\n"
-            report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
+            report += f"💰 *Amount Owed:* {person.currency} {float(person.amount_owed):.2f}\n"
             whatsapp_message = (
                 f"Hi, I'm {person.full_name or 'N/A'}, "
                 f"ID Number: {person.national_id}. "
