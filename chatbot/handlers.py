@@ -1629,7 +1629,7 @@ class MessageHandler:
                     person.user_status = 'borrower_full_name'
                     person.save()
                     
-                    response = f"✅ Found: {borrower_ob.full_name}\n\nPlease enter their phone number for verification:"
+                    response = f"✅ Found: {borrower_ob.full_name}\n\nPlease enter their phone number for verification: {e}"
                     self.whatsapp.send_interactive_buttons(person.phone_number, response)
                     return True
                 else:
