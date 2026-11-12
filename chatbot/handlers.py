@@ -63,6 +63,10 @@ class MessageHandler:
             is_active=True,
             defaults={'user_mode': 'accepting_terms', 'user_status': 'national_id'}
         )
+        if message_text.lower() in ["help", "support", "how it works"]:
+            from .helpers import handle_how_it_works
+            message = handle_how_it_works()
+            return self.whatsapp.send_message(from_number, message)
         if created or person.user_mode == 'accepting_terms':
             if message_text.lower() == 'agree and continue':
                 person.user_mode = 'signup'
@@ -76,7 +80,7 @@ class MessageHandler:
                 return
             else:
                 welcome_message = (
-                    "👋 *Welcome to CrediSafe by Fincheck!*\n\n"
+                    "👋 *Welcome to ©CrediSafe by Fincheck - A registered credit bureau* fincheck.co.zw\n\n"
                     "*Your money. Your records. Your trust.*\n\n"
                     "CrediSafe helps you protect your hard-earned money by keeping track of credit agreements, recording who owes you money, and building a trusted credit profile.\n\n"
                     "With CrediSafe, you can build a stronger financial reputation and unlock more opportunities with suppliers and credit providers.\n\n"
@@ -97,6 +101,7 @@ class MessageHandler:
                     welcome_message,
                     [
                         {'id': 'accept_terms', 'title': 'Agree and Continue'},
+                        {'id': 'how_it_works', 'title': 'How It Works'},
                         {'id': 'reject_terms', 'title': 'Exit'},
                     ]
                 )
@@ -692,6 +697,8 @@ class MessageHandler:
         from decimal import Decimal
         from django.db.models import Sum, Q
         from django.utils import timezone
+        from urllib.parse import quote
+        
 
         contracts = (
             LendingContract.objects
@@ -703,7 +710,7 @@ class MessageHandler:
             .order_by("-created_at")
         )
 
-        if not contracts.exists():
+        if not contracts.exists() and not person.oldest_creditor:
             message = (
                 "📄 *YOUR CREDIT STATEMENT*\n\n"
                 f"Hello {person.full_name} 👋\n\n"
@@ -807,6 +814,13 @@ class MessageHandler:
         #     f"💵 Total repayments: {total_repaid:,.2f}\n"
         #     f"💳 Total outstanding: {total_outstanding:,.2f}\n\n"
         # )
+        if person.oldest_creditor:
+            statement_lines.append(
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"*Creditor Info*\n"
+                f"Creditor: {person.oldest_creditor}\n"
+                f"💰 Amount: {person.currency} {person.amount_owed:,.2f}\n"
+            )
 
         message += (
             f"📥 Borrowing agreements: {borrowed_count}\n"
@@ -816,14 +830,26 @@ class MessageHandler:
         # Individual contracts
         message += "📋 *AGREEMENT DETAILS*\n"
         message += "\n\n".join(statement_lines)
+        whatsapp_message = (
+                f"Hi, I'm {person.full_name or 'N/A'}, "
+                f"ID Number: {person.national_id}. "
+                "I need help with"
+            )
+
+        whatsapp_number = "263715239711"
+
+        whatsapp_link = (
+            f"https://wa.me/{whatsapp_number}"
+            f"?text={quote(whatsapp_message)}"
+        )
 
         # Footer
         message += (
             "\n\n━━━━━━━━━━━━━━━━━━\n"
-            f"🕐 Statement generated: "
+            f"©Credisafe - powered by *Fincheck*\nStatement generated: "
             f"{timezone.now().strftime('%d %b %Y %H:%M')}\n\n"
-            "If you believe any information is incorrect, "
-            "please contact support."
+            "If you believe any information is incorrect or need help, "
+            f"please contact us here: \n{whatsapp_link}"
         )
         buttons =[
             {"id":"detailed", "title": "Detailed Statement"},
@@ -2353,7 +2379,9 @@ class MessageHandler:
             # CREDIT SCORE / PAYMENT STATUS
             # ---------------------------------------------------------
             credit_score = person.credit_score or 0
-
+            if person.oldest_creditor:
+                code = "High Risk-Upper"
+                payment_status = "🔴"
             if credit_score >= 800:
                 payment_status = "🔴"
                 code = "High Risk-Upper"
@@ -2531,12 +2559,15 @@ class MessageHandler:
                     credit_taken_display = (
                         f"{historical_total:,.2f}"
                     )
+                if person.oldest_creditor:
+                    credit_taken_display = (
+                        f"{person.currency} {person.amount_owed:,.2f}"
+                    )
 
             # ---------------------------------------------------------
             # WELCOME MESSAGE
             # ---------------------------------------------------------
             welcome_message += (
-                f"*Your Credit Status*:\n"
                 f"{code} {payment_status}\n\n"
                 f"Net Status\n\n"
                 f"*Credit Owing - Total*\n"
@@ -2567,9 +2598,12 @@ class MessageHandler:
         ]
 
         self.whatsapp.send_interactive_buttons(
-            person.phone_number,
-            welcome_message,
-            buttons
+            to_number=person.phone_number,
+            text=welcome_message,
+            buttons=buttons,
+            header_text="*Your Credit Status*:",
+            footer_text="send `help` for usage instructions"
+            
         )
 
         return True
@@ -2610,7 +2644,6 @@ class MessageHandler:
         if person.oldest_creditor:
             report += f"\n🏦 *Oldest Creditor:* {person.oldest_creditor}\n"
             report += f"💰 *Amount Owed:* {person.currency} {person.amount_owed:.2f}\n"
-            report +=f"To clear your name"
             whatsapp_message = (
                 f"Hi, I'm {person.full_name or 'N/A'}, "
                 f"ID Number: {person.national_id}. "
@@ -2626,7 +2659,7 @@ class MessageHandler:
                 f"?text={quote(whatsapp_message)}"
             )
 
-            report += f"\n\n📲 *To clear your name:*\n{whatsapp_link}"
+            report += f"\n\n📲 *For clearance assistance click here:*\n{whatsapp_link}"
         
         return report
     
