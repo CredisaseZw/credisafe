@@ -2573,18 +2573,17 @@ class MessageHandler:
             # ---------------------------------------------------------
             welcome_message += (
                 "*Your Credit Status*:\n"
-                "──────────────────────────────────\n"
+                "──────────────────────────────\n"
                 f"{code} {payment_status}\n\n"
-                f"*Net Status*\n"
-                "──────────────────────────────────\n"
+                f"*NET STATUS*\n"
                 f"*Credit Owing - Total*\n"
-                "──────────────────────────────────\n"
+                "──────────────────────────────\n"
                 f"\t{credit_taken_display}\n\n"
                 f"*Credit Owing - Overdue*\n"
-                "──────────────────────────────────\n"
+                "──────────────────────────────\n"
                 f"\t{owing_display}\n\n"
                 f"*Credit Given*\n"
-                "──────────────────────────────────\n"
+                "──────────────────────────────\n"
                 f"\t{credit_given_display}\n\n"
                 f"Options:\n"
             )
