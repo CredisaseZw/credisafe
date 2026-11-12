@@ -2541,7 +2541,7 @@ class MessageHandler:
             owing_display = format_currency_totals(
                 owing_by_currency
             )
-            if not owing_display and person.oldest_creditor:
+            if owing_display =='-' and person.oldest_creditor:
                 owing_display = (
                     f"{person.currency} {person.amount_owed:,.2f}"
                 )
