@@ -319,7 +319,7 @@ class MessageHandler:
                 details={'method': 'otp_verified'},
                 performed_by_phone=person.phone_number
             )
-
+ 
             # ---- NEW: branch on the feature flag -------------------------
             if settings.CREDIT_REPORT_PAYWALL_ENABLED:
                 return self.request_report_payment(credit_check, person)
@@ -473,13 +473,15 @@ class MessageHandler:
         handle_report_payment_method.
         """
         from .helpers import get_whatsapp_payments_options
+        from credit.models import ServiceFee
+        fee_ob = ServiceFee.objects.filter(service_type='credit_check').last()
         checker = credit_check.checker
 
         credit_check.status = 'awaiting_payment'
         credit_check.save(update_fields=['status'])
 
-        amount   = settings.CREDIT_REPORT_FEE_AMOUNT
-        currency = settings.CREDIT_REPORT_FEE_CURRENCY
+        amount   = getattr(fee_ob, 'amount') if fee_ob else settings.CREDIT_REPORT_FEE_AMOUNT
+        currency =  getattr(fee_ob, 'currency') if fee_ob else settings.CREDIT_REPORT_FEE_CURRENCY
 
         payment_message=(
             f"To view {person.full_name}'s credit report, a fee of "
@@ -1442,22 +1444,24 @@ class MessageHandler:
                 result = verify_id_from_image(person, media_url)
 
                 if result["auto_verified"]:
-                    person.user_status = 'completed'
-                    person.user_mode = 'welcome'
+                    # person.user_status = 'completed'
+                    # person.user_mode = 'welcome'
                     person.save(update_fields=['user_status', 'user_mode'])
                     self.whatsapp.send_message(
                         person.phone_number,
                         "✅ Your identity has been verified. You're all set!",
                     )
                 else:
-                    person.user_status = 'verification_hold'
-                    person.save(update_fields=['user_status'])
-                    self.whatsapp.send_message(
-                        person.phone_number,
-                        "We couldn't automatically verify your ID. "
-                        "Our team will review it manually and get back to you shortly.",
-                    )
-            if message_text == '1' or message_text.lower() in ["confirm", "yes","1."]:
+                    pass
+                    # person.user_status = 'verification_hold'
+                    # person.save(update_fields=['user_status'])
+                    # self.whatsapp.send_message(
+                    #     person.phone_number,
+                    #     "We couldn't automatically verify your ID. "
+                    #     "Our team will review it manually and get back to you shortly.",
+                    # )
+                    
+            if message_text.lower() in ["confirm", "yes","1."]:
                 if not person.otp_code:
                     person.user_status = "otp_setup"
                     person.save(update_fields=['user_status'])
@@ -1527,7 +1531,7 @@ class MessageHandler:
         elif person.user_status == 'otp_setup':
             import time
             if not self.is_valid_pin(message_text):
-                self.whatsapp.send_message(person.phone_number, "Invalid pin code format. Please use the format 1234.")
+                self.whatsapp.send_message(person.phone_number, "Invalid pin code format. Please pick 4 numbers only e.g 1234")
                 return False
             person.otp_code = message_text
             person.user_status = "completed"
