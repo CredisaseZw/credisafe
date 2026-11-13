@@ -21,7 +21,7 @@ def validate_name(name: str) -> bool:
     return True
 
 def validate_address(address: str) -> bool:
-    if len(address.split(",")) < 4 or len(address) < 5:
+    if len(address.split(",")) < 3 or len(address) < 4:
         return False
     return True
 

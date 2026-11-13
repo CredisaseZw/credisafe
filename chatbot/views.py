@@ -68,9 +68,19 @@ def whatsapp_webhook(request):
                 
                 # --- IMAGE MESSAGES ---
                 elif message_type == 'image':
+                    from users.models import Person
+                    person = Person.objects.filter(
+                                        phone_number=from_number,
+                                    ).first()
+                    borrower_id = person.session_data.get('borrower_national_id',None)
+                    borrower_ob = Person.objects.filter(
+                                        national_id=borrower_id,
+                                    ).first()
                     image_data = message.get('image', {})
                     from .whatsapp_client import WhatsAppClient
                     media_id = image_data.get('id')
+                    if person and person.is_verified:
+                        from_number = borrower_ob.phone_number if borrower_ob else from_number
                     media_url = WhatsAppClient().download_whapi_image(media_id, from_number) if media_id else None
                     media_caption = image_data.get('caption', '')
                     # Set message text to indicate it's an image

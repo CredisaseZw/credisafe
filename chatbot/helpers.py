@@ -178,3 +178,26 @@ def handle_how_it_works():
     )
 
     return message
+
+
+
+def welcome():
+    message = (
+        "👋 Hi, I’m Credi by Fincheck (Registered Credit Bureau Zimbabwe) http://fincheck.co.zw\n\n"
+        "Your money. Your records. Your trust.\n\n"
+        "I help you protect your hard-earned money by enabling you to check the credit status of a potential borrower, record credit transactions, follow up on overdue loans and keep track of payments and balances.\n\n"
+        "With me, you can build a stronger financial reputation and unlock more opportunities with suppliers and lenders.\n\n"
+        "🔒 *Your Privacy Matters*\n\n"
+        "Your information belongs to you. Here is our promise:\n"
+        "🔒 Private & Confidential: Only you can access your financial records.\n"
+        "🛡️ Your Information, Your Control: We do not share or report your records to tax authorities or other third parties.\n"
+        "🤝 Your Consent Comes First: No one can view your credit information without your permission.\n\n"
+        "💳 *Payments & Services*\n"
+        "Some services, such as uploading credit records and checking credit status, require a small fee.\n"
+        "Payments are made easily through mobile money platforms, including EcoCash, InnBucks, Omari, and other supported payment options.\n"
+        "You will be informed of the applicable charges before completing a paid service.\n"
+        "Ready to take control of your credit and protect your money?\n"
+        "By continuing, you acknowledge and agree to our privacy practices and service terms."
+    )
+
+    return message

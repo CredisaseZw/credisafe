@@ -79,23 +79,8 @@ class MessageHandler:
                 )
                 return
             else:
-                welcome_message = (
-                    "👋 *Welcome to ©CrediSafe by Fincheck - A registered credit bureau* fincheck.co.zw\n\n"
-                    "*Your money. Your records. Your trust.*\n\n"
-                    "Credi helps you protect your hard-earned money by keeping track of credit agreements, recording who owes you money, and building a trusted credit profile.\n\n"
-                    "With Credi, you can build a stronger financial reputation and unlock more opportunities with suppliers and credit providers.\n\n"
-                    "🔒 *Your Privacy Matters*\n\n"
-                    "Your information belongs to you. Here's our commitment:\n\n"
-                    "🔐 *Private & Confidential:* Your financial records are private and accessible only to you.\n\n"
-                    "🛡️ *Your Information, Your Control:* Credi does not report or provide access to your records to tax authorities or other third parties.\n\n"
-                    "🤝 *Your Consent Comes First:* No one can view your credit information without your explicit consent.\n\n"
-                    "💳 *Payments & Services*\n\n"
-                    "Some Credi services, such as uploading credit records and making credit inquiries, may require payment.\n\n"
-                    "Payments are conveniently processed through mobile money platforms, including EcoCash, InnBucks, Omari, and other supported payment options.\n\n"
-                    "You will be informed of the applicable charges before completing a paid service.\n\n"
-                    "*Ready to take control of your credit and protect your money?*\n\n"
-                    "By continuing, you acknowledge and agree to our privacy practices and service terms."
-                )
+                from .helpers import welcome
+                welcome_message = welcome()
                 return self.whatsapp.send_interactive_buttons(
                     from_number,
                     welcome_message,
@@ -900,14 +885,16 @@ class MessageHandler:
         if message_text.lower() in ["yes", "y","1"]:
             person.user_status = "otp_setup"
             person.user_mode ="signup"
-            person.is_verified = True
             person.verification_status = "verified"
             person.save(update_fields=["user_status","user_mode","is_verified","verification_status"])
-            message_to_subject = "Your details have been added successfully. Enter a 4-digit code for future access"
+            message_to_subject = "Your details have been added successfully. Enter a 4-digit pin code for future access eg 1234"
             self.whatsapp.send_message(person.phone_number, message_to_subject)
             # title_two = "Get Credit"
             if uploader:
-                title_one ="Give Credit"
+                if person.is_verified:
+                    title_one ="Give Credit"
+                else:
+                    title_one = "Exit"
                 message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on Credi\n\n"
                 return self.show_main_menu(uploader,welcome_message=message_to_creditor,title_one=title_one)
             return True
@@ -1322,7 +1309,7 @@ class MessageHandler:
 
             self.whatsapp.send_interactive_buttons(
                 person.phone_number,
-                "Please add residential address in the format: street, suburb, city, country.\n\nFor example:\n12 Grade close, Ascot, Bulawayo, Zimbabwe"
+                "Please add residential address in the format: street, suburb, city, country.\n\nFor example:\n12 Grade close, Ascot, Bulawayo"
             )
             return True
         
@@ -1335,7 +1322,7 @@ class MessageHandler:
             if not validate_address(address):
                 self.whatsapp.send_interactive_buttons(
                     person.phone_number,
-                    "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera, Zimbabwe\n2. Sadza village, Ward 20, Chivhu, Zimbabwe"
+                    "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera\n2. Sadza village, Ward 20, Chivhu"
                 )
                 return False
 
@@ -1381,7 +1368,7 @@ class MessageHandler:
                 person.user_status = "edit_address"
                 person.user_mode = "signup"
                 person.save(update_fields=['user_status','user_mode'])
-                self.whatsapp.send_interactive_buttons(person.phone_number, "Please add residential address in the format: street/house number, suburb, city, country.\n\nFor example:\n12 Churchill Ave, Alex Park, Harare, Zimbabwe")
+                self.whatsapp.send_interactive_buttons(person.phone_number, "Please add residential address in the format: street/house number, suburb, city, country.\n\nFor example:\n12 Churchill Ave, Alex Park, Harare")
                 return True
         
         elif person.user_status == 'edit_full_name':
@@ -1417,7 +1404,7 @@ class MessageHandler:
             if not len(address.split(",")) < 4 or len(address) < 5:
                 self.whatsapp.send_interactive_buttons(
                     person.phone_number,
-                    "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera, Zimbabwe\n2. Sadza village, Ward 20, Chivhu, Zimbabwe"
+                    "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera\n2. Sadza village, Ward 20, Chivhu"
                 )
                 return False
             person.address = address
@@ -1542,13 +1529,14 @@ class MessageHandler:
             person.otp_code = message_text
             person.user_status = "completed"
             person.user_mode = "welcome"
-            person.is_verified = True
-            person.verification_status='verified'
+            # person.is_verified = True
+            # person.verification_status='verified'
             person.save(update_fields=['otp_code', 'user_status', 'user_mode', 'is_verified', 'verification_status'])
-            
-            self.show_main_menu(person)
-            # self.whatsapp.send_message(person.phone_number, "Pin code set successfully! Please remember it for future access. \n\nStay tuned for account verification updates.")
-            time.sleep(5)
+            if not person.is_verified:
+                self.whatsapp.send_message(person.phone_number, "Pin code set successfully! Please remember it for future access. \n\nStay tuned for account verification updates.")
+            else:
+                self.show_main_menu(person)
+            # time.sleep(5)
             last_message = (
                 WhatsAppMessage.objects.filter(
                     person=person,
@@ -1878,13 +1866,13 @@ class MessageHandler:
             person.user_status = 'borrower_address'
             person.save()
             
-            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera, Zimbabwe\n\n> reply exit to return to main menu"
+            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera\n\n> reply exit to return to main menu"
             self.whatsapp.send_interactive_buttons(person.phone_number, message)
             return True
         
         elif person.user_status == 'borrower_address':
             if not validate_address(message_text):
-                response = "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera, Zimbabwe\n2. Sadza village, Ward 20, Chivhu, Zimbabwe"
+                response = "Invalid address format. Please use the format: street/house number/village, suburb/district, city/town, country.\n\nFor example:\n1. 12 Grade close, Winston Park, Marondera\n2. Sadza village, Ward 20, Chivhu"
                 self.whatsapp.send_interactive_buttons(person.phone_number, response)
                 return False
 
@@ -1945,6 +1933,25 @@ class MessageHandler:
                 if media_sent is None:
                     message = "Information saved successfully, please send a selfie of the subject holding their ID card."
                     self.whatsapp.send_message(person.phone_number, message)
+                
+                borrower_ob.user_mode = 'borrower_confirmation'
+                borrower_ob.save(update_fields=['user_mode'])
+
+                subject_details = (
+                    "Do you accept addition of your details below to Credi as a user?\n\n"
+                    f"Name: {borrower_ob.full_name}\n"
+                    f"ID Number: {borrower_ob.national_id}\n"
+                    f"Address: {borrower_ob.address}\n"
+                    f"Mobile Number: {borrower_ob.phone_number}\n\n"
+                    f"Your details have been added by {person.full_name}\n"
+                    "\nAccepting will allow you to see your credit information, loans, blacklists, court records, and more. You can also give credit to others with confidence.\n\n"
+                )
+                buttons = [
+                        {'id': 'yes', 'title': 'Yes'},
+                        {'id': 'edit', 'title': 'Edit Details'},
+                        {'id': 'reject', 'title': 'Reject'},
+                        ]
+                self.whatsapp.send_interactive_buttons(to_number=borrower_ob.phone_number,text=subject_details,buttons=buttons,header_text=None,footer_text="Accept to manage your credit and lend with confidence.")
                 try:
                     from users.services.identity_service import (
                                 fetch_individual,
@@ -2406,7 +2413,7 @@ class MessageHandler:
 
             elif person_loans.count() == 0:
                 code = "No Transaction History"
-                payment_status = "⚪"
+                payment_status = "🔘"
 
             else:
                 code = "Low Risk"
@@ -2581,7 +2588,7 @@ class MessageHandler:
             # ---------------------------------------------------------
             # WELCOME MESSAGE
             # ---------------------------------------------------------
-            welcome_message += (
+            welcome_message_new += (
                 "*Your Credit Status*:\n"
                 "─────────────────\n"
                 f"{code} {payment_status}\n\n"
@@ -2597,6 +2604,18 @@ class MessageHandler:
                 f"\t{credit_given_display}\n\n"
                 f"Options:\n"
             )
+            welcome_message += (
+                            "*Your Credit Status*:\n"
+                            f"{code} {payment_status}\n\n"
+                            f"*NET STATUS*\n"
+                            f"*Credit Owing - Total*\n"
+                            f"\t{credit_taken_display}\n\n"
+                            f"*Credit Owing - Overdue*\n"
+                            f"\t{owing_display}\n\n"
+                            f"*Debtors*\n"
+                            f"\t{credit_given_display}\n\n"
+                            f"Options:\n"
+                        )
 
         # -------------------------------------------------------------
         # SEND INTERACTIVE BUTTONS
@@ -2621,7 +2640,7 @@ class MessageHandler:
             text=welcome_message,
             buttons=buttons,
             header_text=None,
-            footer_text="send *help* for usage instructions"
+            footer_text="type _*help*_ for usage instructions"
             
         )
 
