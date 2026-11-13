@@ -269,9 +269,9 @@ class MessageHandler:
             person.user_mode = "welcome"
             person.save(update_fields=["user_mode"])
             credit_check.save(update_fields=["status"])
-            message_to_checker = f"{person.full_name} ({person.national_id}) has rejected your payment status check request."
+            message_to_checker = f"{person.full_name} ({person.national_id}) has rejected your credit status check request."
             self.whatsapp.send_message(credit_check.checker.phone_number, message_to_checker)
-            return self.whatsapp.send_message(person.phone_number, "You have rejected the payment status check request.")
+            return self.whatsapp.send_message(person.phone_number, "You have rejected the credit status check request.")
         
         try:
             otp_code = int(message_text.strip())
@@ -284,7 +284,7 @@ class MessageHandler:
         if int(person.otp_code) == otp_code:
             message_to_checker = (
                 f"{person.full_name} ({person.national_id}) has accepted your "
-                f"payment status check request."
+                f"credit status check request."
             )
             self.whatsapp.send_message(checker.phone_number, message_to_checker)
 
@@ -295,7 +295,7 @@ class MessageHandler:
             time.sleep(1)
             self.whatsapp.send_message(
                 person.phone_number,
-                f"You have accepted the payment status check request from {checker.full_name}."
+                f"You have accepted the credit status check request from {checker.full_name}."
             )
 
             CreditCheckAudit.objects.create(
@@ -474,10 +474,10 @@ class MessageHandler:
         currency =  getattr(fee_ob, 'currency') if fee_ob else settings.CREDIT_REPORT_FEE_CURRENCY
 
         payment_message=(
-            f"To view {person.full_name}'s credit report, a fee of "
+            f"To view {person.full_name}'s credit status, a fee of "
             f"{currency} {amount}  is required.\n\n Please select a payment method below or reply 'cancel' to cancel the request."
         )
-        get_whatsapp_payments_options(person, payment_message)
+        get_whatsapp_payments_options(checker, payment_message)
         
         checker.user_mode   = 'inquiry_payment'
         checker.user_status = 'payment_method'
@@ -1564,7 +1564,7 @@ class MessageHandler:
         # Check if user is verified
         if not person.is_verified:
             response = "🔒 *Verification Required* 🔒\n\n"
-            response += "You need to be verified before Payment Status Checking.\n"
+            response += "You need to be verified before credit status Checking.\n"
             response += "Please wait while we verify your details."
             self.whatsapp.send_message(person.phone_number, response)
             return self.show_main_menu(person)
@@ -2672,7 +2672,7 @@ class MessageHandler:
             if credit_history:
                 defaulted_loans_taken = credit_history.total_claims + credit_history.total_courts
         
-        report = f"*{is_self_check}Payment Status Report*\n\n"
+        report = f"*{is_self_check}credit status Report*\n\n"
         report += f"*{person.national_id} -{person.full_name or 'N/A'}*\n\n"
         report += f"*Listed Address:*\n\t{person.address}\n\n"
         report += f"*Status -* {risk} {emoji}\n"
@@ -2740,7 +2740,7 @@ class MessageHandler:
             
             if require_otp:
             # Send SMS to checker
-                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your payment status, enter your PIN if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
+                message = f"Hi {borrower_name},\n\n{creditor_name} wants to check your credit status, enter your PIN if you agree.\n\n _You can safely ignore this message if you believe this is a mistake._"
                 self.whatsapp.send_message(borrower.phone_number, message)
                 borrower.user_mode='accept_status_check'
                 borrower.set_session_data('pending_credit_check_id', credit_check.id)
@@ -2748,7 +2748,7 @@ class MessageHandler:
                 # person.user_status = 'otp_confirmation'
                 # person.save()
                 
-                response = f"A payment status check has been requested to {borrower_name}, you will receive an update once they respond."
+                response = f"A credit status check has been requested to {borrower_name}, you will receive an update once they respond."
                 return self.whatsapp.send_message(person.phone_number, response)
             
             subject_name = borrower.full_name

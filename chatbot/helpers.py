@@ -18,7 +18,7 @@ def get_whatsapp_payments_options(lender, message_to_send):
                 to_number=lender.phone_number,
                 body_text=message_to_send,
                 sections=sections,
-                button_text="Select Payment Method"
+                button_text="Payment Method"
             )
     
 def handle_how_it_works():
