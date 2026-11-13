@@ -75,22 +75,22 @@ class MessageHandler:
             elif message_text.lower() == 'exit':
                 self.whatsapp.send_message(
                     from_number,
-                    "You have rejected the CrediSafe terms of service. If you change your mind, you can start again by sending 'Hi'."
+                    "You have rejected the Credi terms of service. If you change your mind, you can start again by sending 'Hi'."
                 )
                 return
             else:
                 welcome_message = (
                     "👋 *Welcome to ©CrediSafe by Fincheck - A registered credit bureau* fincheck.co.zw\n\n"
                     "*Your money. Your records. Your trust.*\n\n"
-                    "CrediSafe helps you protect your hard-earned money by keeping track of credit agreements, recording who owes you money, and building a trusted credit profile.\n\n"
-                    "With CrediSafe, you can build a stronger financial reputation and unlock more opportunities with suppliers and credit providers.\n\n"
+                    "Credi helps you protect your hard-earned money by keeping track of credit agreements, recording who owes you money, and building a trusted credit profile.\n\n"
+                    "With Credi, you can build a stronger financial reputation and unlock more opportunities with suppliers and credit providers.\n\n"
                     "🔒 *Your Privacy Matters*\n\n"
                     "Your information belongs to you. Here's our commitment:\n\n"
                     "🔐 *Private & Confidential:* Your financial records are private and accessible only to you.\n\n"
-                    "🛡️ *Your Information, Your Control:* CrediSafe does not report or provide access to your records to tax authorities or other third parties.\n\n"
+                    "🛡️ *Your Information, Your Control:* Credi does not report or provide access to your records to tax authorities or other third parties.\n\n"
                     "🤝 *Your Consent Comes First:* No one can view your credit information without your explicit consent.\n\n"
                     "💳 *Payments & Services*\n\n"
-                    "Some CrediSafe services, such as uploading credit records and making credit inquiries, may require payment.\n\n"
+                    "Some Credi services, such as uploading credit records and making credit inquiries, may require payment.\n\n"
                     "Payments are conveniently processed through mobile money platforms, including EcoCash, InnBucks, Omari, and other supported payment options.\n\n"
                     "You will be informed of the applicable charges before completing a paid service.\n\n"
                     "*Ready to take control of your credit and protect your money?*\n\n"
@@ -182,7 +182,7 @@ class MessageHandler:
         elif person.user_mode=="lender_activation_payment":
             return self.handle_lender_activation_payment(person, message_text)
         elif person.user_mode =="addition_aborted":
-            return self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to CrediSafe. Please contact us at +263715239711 if you change your mind or if you have any questions.")
+            return self.whatsapp.send_message(person.phone_number, "You rejected addition of your details to Credi. Please contact us at +263715239711 if you change your mind or if you have any questions.")
         
         elif person.user_mode == "edit_borrower":
             return self.whatsapp.send_message(person.phone_number, "This feature is currently in staging, stay tuned for updates!")
@@ -295,7 +295,7 @@ class MessageHandler:
                 {'id':'cancel', 'title': 'Cancel'},
                 {'id': 'exit', 'title': 'Exit'},
             ]
-            return self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid PIN. Please type your pincode to use Credisafe.", buttons)
+            return self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid PIN. Please type your pincode to use Credi.", buttons)
         if int(person.otp_code) == otp_code:
             message_to_checker = (
                 f"{person.full_name} ({person.national_id}) has accepted your "
@@ -461,7 +461,7 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment prompt of {payment.amount} {payment.currency} for your CrediSafe Enquiry has been sent to {payment_phone_number}."
+            f"A payment prompt of {payment.amount} {payment.currency} for your Credi Enquiry has been sent to {payment_phone_number}."
             f"Please check your phone screen for the {last_payment_method} pop-up prompt and enter your PIN to approve."
         )
         return True
@@ -901,7 +901,7 @@ class MessageHandler:
             # title_two = "Get Credit"
             if uploader:
                 title_one ="Give Credit"
-                message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on CrediSafe\n\n"
+                message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on Credi\n\n"
                 return self.show_main_menu(uploader,welcome_message=message_to_creditor,title_one=title_one)
             return True
         elif message_text.lower() in ["2", "2.", "edit","edit details"]:
@@ -920,10 +920,10 @@ class MessageHandler:
             person.verification_status = "rejected"
             person.user_mode ="addition_aborted"
             person.save(update_fields=["verification_status","user_mode"])
-            message_to_subject = "You rejected adding your details to CrediSafe. Please contact us at 0715239711 if you decided otherwise or if you have any questions."
+            message_to_subject = "You rejected adding your details to Credi. Please contact us at 0715239711 if you decided otherwise or if you have any questions."
             self.whatsapp.send_message(person.phone_number, message_to_subject)
             if uploader:
-                message_to_creditor = f"{person.full_name} - {person.national_id} rejected adding their details to CrediSafe.\n\n"
+                message_to_creditor = f"{person.full_name} - {person.national_id} rejected adding their details to Credi.\n\n"
                 self.whatsapp.send_message(uploader.phone_number, message_to_creditor)
             return True
         else:
@@ -1140,7 +1140,7 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment prompt of {payment.amount} {payment.currency} for your CrediSafe Enquiry has been sent to {payment_phone_number}."
+            f"A payment prompt of {payment.amount} {payment.currency} for your Credi Enquiry has been sent to {payment_phone_number}."
             f"Please check your phone screen for the {method} pop-up prompt and enter your PIN to approve."
         )
         return True
@@ -1150,7 +1150,7 @@ class MessageHandler:
         try:
             otp = int(message_text)
         except ValueError:
-            return self.whatsapp.send_message(person.phone_number, "Invalid PIN. Please type your pincode to use Credisafe.")
+            return self.whatsapp.send_message(person.phone_number, "Invalid PIN. Please type your pincode to use Credi.")
 
         if int(person.otp_code) == otp:
 
@@ -1200,13 +1200,13 @@ class MessageHandler:
         person_last_message = WhatsAppMessage.objects.filter(person=person).order_by('-timestamp').first()
         one_hour_ago = timezone.now() - timedelta(hours=1)
         if person_last_message and person_last_message.timestamp <= one_hour_ago:
-            self.whatsapp.send_message(person.phone_number, f"Hi {person.full_name}. Welcome back to CrediSafe. Enter your pin to continue.")
+            self.whatsapp.send_message(person.phone_number, f"Hi {person.full_name}. Welcome back to Credi. Enter your pin to continue.")
             person.user_mode='login'
             person.save(update_fields=['user_mode'])
             return True
             
         if person.user_mode == 'welcome':
-            welcome_message = "Welcome to CrediSafe. You are not yet a user. Please enter your ID number to continue. use format 12345678A90"
+            welcome_message = "Welcome to Credi. You are not yet a user. Please enter your ID number to continue. use format 12345678A90"
             self.whatsapp.send_interactive_buttons(person.phone_number, welcome_message)
         elif person.user_mode =="signup":
             self.whatsapp.send_interactive_buttons(person.phone_number, "Please finish signup to continue.")
@@ -1244,7 +1244,7 @@ class MessageHandler:
         if person.user_status == 'national_id':
             nid = normalize_national_id(message_text)
             if not person.national_id and message_text.lower() in ["hi", "hello", "hie","agree and continue","hey"]:
-                self.whatsapp.send_message(person.phone_number, "Welcome to CrediSafe. You are not yet a user. Please enter your ID number to continue.")
+                self.whatsapp.send_message(person.phone_number, "Welcome to Credi. You are not yet a user. Please enter your ID number to continue.")
                 return False
 
             if not is_valid_zim_national_id(nid):
@@ -1609,7 +1609,7 @@ class MessageHandler:
                     self.whatsapp.send_message(person.phone_number, response)
                     return True
                 if person.verification_status == 'rejected':
-                    response = "This person rejected using CrediSafe services."
+                    response = "This person rejected using Credi services."
                     self.whatsapp.send_message(person.phone_number, response)
                     return True
                 if person.get_session_key('direct_lending'):
@@ -2243,7 +2243,7 @@ class MessageHandler:
             person.save()
         elif message_text.lower() in ["no", "nah", "nope"]:
             self.whatsapp.send_message(person.phone_number, response)
-            return self.show_main_menu(person=person, welcome_message="Lending process cancelled. Welcome back to CrediSafe.")
+            return self.show_main_menu(person=person, welcome_message="Lending process cancelled. Welcome back to Credi.")
         
         else:
             response = "❌ Invalid response. Please type 'Yes' to proceed or 'No' to cancel."
@@ -2338,7 +2338,7 @@ class MessageHandler:
         if not person.is_verified:
             self.whatsapp.send_message(
                 person.phone_number,
-                "Finish signup to use the CrediSafe services."
+                "Finish signup to use the Credi services."
             )
             return False
 
@@ -2357,7 +2357,7 @@ class MessageHandler:
         ):
             self.whatsapp.send_message(
                 person.phone_number,
-                f"Hi {person.full_name}. Welcome back to CrediSafe. "
+                f"Hi {person.full_name}. Welcome back to Credi. "
                 f"Enter your pin to continue."
             )
 

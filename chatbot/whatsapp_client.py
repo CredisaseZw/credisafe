@@ -890,7 +890,7 @@ class WhatsAppClient:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
 
-        filename = f"whatsapp_images/{from_number}_{media_id[:6]}.jpg"
+        filename = f"whatsapp_images/{from_number}_{media_id}.jpg"
 
         saved_path = default_storage.save(
             filename,
