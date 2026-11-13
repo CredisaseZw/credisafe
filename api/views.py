@@ -491,6 +491,8 @@ class PersonViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def verify(self, request, pk=None):
+        from chatbot.handlers import MessageHandler
+        whatsapp_client = MessageHandler()
         """Verify a person (Admin only)"""
         if not request.user.is_superuser:
             return Response(
@@ -504,11 +506,18 @@ class PersonViewSet(viewsets.ModelViewSet):
         person.verification_status = 'verified'
         person.save()
         
+        try:
+            whatsapp_client.show_main_menu(person,"Your account has been verified successfully! You can now access all features.")
+        except Exception as e:
+            logger.error(f"Failed to send WhatsApp message to {person.phone_number}: {e}")
+        
         return Response(PersonSerializer(person).data)
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         """Approve a person after manual review."""
+        from chatbot.handlers import MessageHandler
+        whatsapp_client = MessageHandler()
 
         if not request.user.is_superuser:
             return Response(
@@ -530,7 +539,11 @@ class PersonViewSet(viewsets.ModelViewSet):
             'id_verification_method',
             'updated_at'
         ])
-
+        
+        try:
+            whatsapp_client.show_main_menu(person,"Your account has been verified successfully! You can now access all features.")
+        except Exception as e:
+            logger.error(f"Failed to send WhatsApp message to {person.phone_number}: {e}")
         return Response(PersonSerializer(person).data)
     
     @action(detail=True, methods=['get'])
@@ -570,7 +583,9 @@ class PersonViewSet(viewsets.ModelViewSet):
 
                 images.append({
                     'filename': filename,
-                    'url': default_storage.url(file_path)
+                    'url': request.build_absolute_uri(
+                            default_storage.url(file_path)
+                        )
                 })
 
             return Response({
