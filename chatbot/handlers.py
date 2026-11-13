@@ -322,7 +322,11 @@ class MessageHandler:
  
             # ---- NEW: branch on the feature flag -------------------------
             if settings.CREDIT_REPORT_PAYWALL_ENABLED:
+                from .validators import has_available_credit_check
+                if has_available_credit_check(checker):
+                    return self.deliver_credit_report(credit_check, person)
                 return self.request_report_payment(credit_check, person)
+            
             else:
                 return self.deliver_credit_report(credit_check, person)
             # -------------------------------------------------------------
@@ -441,6 +445,7 @@ class MessageHandler:
                 metadata={
                     'kind': 'credit_report_fee',
                     'credit_check_id': credit_check.id,
+                    'service': 'credit_check',
                 },
             )
         except Exception as exc:
@@ -1123,6 +1128,7 @@ class MessageHandler:
                 metadata={
                     'kind': 'credit_acceptance_fee',
                     'contract_id': contract.id,
+                    'service':"credit_activation",
                 },
             )
         except Exception as exc:
