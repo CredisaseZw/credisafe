@@ -1333,19 +1333,40 @@ class MessageHandler:
                 'address',
                 'user_status'
             ])
-
-            media_sent =self.whatsapp.send_media(
-                person.phone_number,
-                "image",
-                "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
-                "Please send a picture of the subject holding their ID card like this"
+            
+            name = getattr(person, 'full_name', 'N/A')
+            national_id = getattr(person, 'national_id', 'N/A')
+            address = getattr(person, 'address', 'N/A')
+            mobile_number = getattr(person, 'phone_number', 'N/A')
+            message_to_send = (
+                "*Confirm details*\n\n"
+                f"Name: {name}\n"
+                f"ID Number: {national_id}\n"
+                f"Address: {address}\n" 
+                f"Mobile Number: {mobile_number}"
             )
-            if media_sent is None:
-                self.whatsapp.send_message(
-                    person.phone_number,
-                    "Please send a picture of the subject holding their ID card like above"
-                )
-            return True
+            sections = [
+                {
+                    "title": "Confirmation Options",
+                    "rows": [
+                        {"id": "1", "title": "Confirm"},
+                        {"id": "2", "title": "Edit"},
+                        {"id": "3", "title": "Cancel"},
+                        {"id": "back", "title": "Back"},
+                        {"id": "exit", "title": "Exit"}
+                    ]
+                }
+            ]
+
+            return self.whatsapp.send_interactive_list(
+                to_number=person.phone_number,
+                body_text=message_to_send,
+                sections=sections,
+                button_text="Choose Action",
+                footer_text="Please select an option."
+            )
+
+            
         
         # =========================================================
         # STEP 5: EDITING PROFILE
@@ -1428,23 +1449,26 @@ class MessageHandler:
                 #         "We couldn't process the image. Please wait while the team reviews .",
                 #     )
                 #     return
+                if not person.otp_code:
+                    person.user_status = "otp_setup"
+                    person.save(update_fields=['user_status'])
+                    # return True
 
-                self.whatsapp.send_message(
-                    person.phone_number,
-                    "Image received. Please wait while we verify your details.",
-                )
 
                 result = verify_id_from_image(person, media_url)
 
                 if result["auto_verified"]:
+                    import time
                     # person.user_status = 'completed'
                     # person.user_mode = 'welcome'
-                    person.save(update_fields=['user_status', 'user_mode'])
+                    # person.save(update_fields=['user_status', 'user_mode'])
+                    time.sleep(5)
                     self.whatsapp.send_message(
                         person.phone_number,
-                        "✅ Your identity has been verified. You're all set!",
+                        "✅ Your identity has been verified",
                     )
                 else:
+                    return self.whatsapp.send_message(person.phone_number, "Image received. Please enter a 4-digit pin code for future access.")
                     pass
                     # person.user_status = 'verification_hold'
                     # person.save(update_fields=['user_status'])
@@ -1455,17 +1479,21 @@ class MessageHandler:
                     # )
                     
             if message_text.lower() in ["confirm", "yes","1."]:
-                if not person.otp_code:
-                    person.user_status = "otp_setup"
-                    person.save(update_fields=['user_status'])
-                    self.whatsapp.send_message(person.phone_number, "Please enter a 4-digit pin code for future access.")
-                    return True
-                else:
-                    person.user_status = "completed"
-                    person.user_mode ="welcome"
-                    person.save(update_fields=['user_status', 'user_mode'])
-                    self.whatsapp.send_message(person.phone_number, "Got it! Your details are currently being verified, you'll be notified when completed.")
-                    return True
+                media_sent =self.whatsapp.send_media(
+                person.phone_number,
+                    "image",
+                    "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
+                    "Please send a picture of the subject holding their ID card like this"
+                )
+                if media_sent is None:
+                    return self.whatsapp.send_message(
+                        person.phone_number,
+                        "Please send a picture of the subject holding their ID card like above"
+                    )
+                # else:
+                #     person.save(update_fields=['user_status', 'user_mode'])
+                #     self.whatsapp.send_message(person.phone_number, "Got it! Your details are currently being verified, you'll be notified when completed.")
+                #     return True
             elif message_text == '2' or message_text.lower() in ["edit", "no","2."]:
                 person.user_mode = "edit_profile"
                 person.save(update_fields=['user_mode'])
@@ -1486,37 +1514,9 @@ class MessageHandler:
             elif message_text == '3' or message_text.lower() in ["exit", "quit", "q","cancel"]:
                 self.whatsapp.send_message(person.phone_number, "Signup has been cancelled.")
                 return True
-            name = getattr(person, 'full_name', 'N/A')
-            national_id = getattr(person, 'national_id', 'N/A')
-            address = getattr(person, 'address', 'N/A')
-            mobile_number = getattr(person, 'phone_number', 'N/A')
-            message_to_send = (
-                "*Confirm details*\n\n"
-                f"Name: {name}\n"
-                f"ID Number: {national_id}\n"
-                f"Address: {address}\n" 
-                f"Mobile Number: {mobile_number}"
-            )
-            sections = [
-                {
-                    "title": "Confirmation Options",
-                    "rows": [
-                        {"id": "1", "title": "Confirm"},
-                        {"id": "2", "title": "Edit"},
-                        {"id": "3", "title": "Cancel"},
-                        {"id": "back", "title": "Back"},
-                        {"id": "exit", "title": "Exit"}
-                    ]
-                }
-            ]
-
-            return self.whatsapp.send_interactive_list(
-                to_number=person.phone_number,
-                body_text=message_to_send,
-                sections=sections,
-                button_text="Choose Action",
-                footer_text="Please select an option."
-            )
+            else:
+                self.whatsapp.send_message(person.phone_number, "Invalid option. Please try again.")
+                return True
         
         # =========================================================
         # STEP 7: OTP SETUP
