@@ -492,7 +492,9 @@ class PersonViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def verify(self, request, pk=None):
         from chatbot.handlers import MessageHandler
-        whatsapp_client = MessageHandler()
+        from chatbot.whatsapp_client import WhatsAppClient
+        whatsapp_client = WhatsAppClient()
+        handler = MessageHandler()
         """Verify a person (Admin only)"""
         if not request.user.is_superuser:
             return Response(
@@ -502,12 +504,15 @@ class PersonViewSet(viewsets.ModelViewSet):
         
         person = self.get_object()
         person.is_verified = True
+        person.user_mode='welcome'
+        person.user_status='welcome'
         person.needs_manual_review = False
         person.verification_status = 'verified'
         person.save()
         
         try:
-            whatsapp_client.show_main_menu(person,"Your account has been verified successfully! You can now access all features.")
+            whatsapp_client.send_message(person.phone_number, "Your account has been verified successfully! You can now access all features.")
+            handler.show_main_menu(person)
         except Exception as e:
             logger.error(f"Failed to send WhatsApp message to {person.phone_number}: {e}")
         
