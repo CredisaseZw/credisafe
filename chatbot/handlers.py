@@ -2588,34 +2588,34 @@ class MessageHandler:
             # ---------------------------------------------------------
             # WELCOME MESSAGE
             # ---------------------------------------------------------
-            welcome_message_new += (
+            # welcome_message_new += (
+            #     "*Your Credit Status*:\n"
+            #     "─────────────────\n"
+            #     f"{code} {payment_status}\n\n"
+            #     f"*NET STATUS*\n"
+            #     f"*Credit Owing - Total*\n"
+            #     "─────────────────\n"
+            #     f"\t{credit_taken_display}\n\n"
+            #     f"*Credit Owing - Overdue*\n"
+            #     "─────────────────\n"
+            #     f"\t{owing_display}\n\n"
+            #     f"*Credit Given*\n"
+            #     "─────────────────\n"
+            #     f"\t{credit_given_display}\n\n"
+            #     f"Options:\n"
+            # )
+            welcome_message += (
                 "*Your Credit Status*:\n"
-                "─────────────────\n"
                 f"{code} {payment_status}\n\n"
-                f"*NET STATUS*\n"
+                "*NET STATUS*\n"
                 f"*Credit Owing - Total*\n"
-                "─────────────────\n"
                 f"\t{credit_taken_display}\n\n"
                 f"*Credit Owing - Overdue*\n"
-                "─────────────────\n"
                 f"\t{owing_display}\n\n"
-                f"*Credit Given*\n"
-                "─────────────────\n"
+                f"*Debtors*\n"
                 f"\t{credit_given_display}\n\n"
                 f"Options:\n"
             )
-            welcome_message += (
-                            "*Your Credit Status*:\n"
-                            f"{code} {payment_status}\n\n"
-                            f"*NET STATUS*\n"
-                            f"*Credit Owing - Total*\n"
-                            f"\t{credit_taken_display}\n\n"
-                            f"*Credit Owing - Overdue*\n"
-                            f"\t{owing_display}\n\n"
-                            f"*Debtors*\n"
-                            f"\t{credit_given_display}\n\n"
-                            f"Options:\n"
-                        )
 
         # -------------------------------------------------------------
         # SEND INTERACTIVE BUTTONS
@@ -2640,7 +2640,7 @@ class MessageHandler:
             text=welcome_message,
             buttons=buttons,
             header_text=None,
-            footer_text="type _*help*_ for usage instructions"
+            footer_text="type '*help*' for usage instructions"
             
         )
 
