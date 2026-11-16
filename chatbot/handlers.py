@@ -1513,7 +1513,7 @@ class MessageHandler:
         # =========================================================
         # STEP 6: VERIFY DETAILS
         # =========================================================
-        elif person.user_status == 'verify_details':
+        elif person.user_status in ['verify_details','id_image']:
             if person.user_status =='id_image' and not "[Image]" in message_text:
                 self.whatsapp.send_message(person.phone_number, "Please send a picture of your ID card")
                 return True
@@ -1547,7 +1547,7 @@ class MessageHandler:
                 else:
                     person.user_status='id_image'
                     person.save(update_fields=['user_status'])
-                    self.whatsapp.send_message(person.phone_number, "Got it, now send a picture of your national ID")
+                    return self.whatsapp.send_message(person.phone_number, "Got it, now send a picture of your national ID")
                     
                 
                         
@@ -2074,7 +2074,6 @@ class MessageHandler:
             person.user_status = 'borrower_full_name'
             person.save(update_fields=['user_status'])
             if borrower_id:
-                
                 message = f"ID Number {borrower_id} \n Please type Full Name and Surname eg John Doe or John Bob Doe"
             else:
                 message ="Please type Full Name and Surname eg John Doe or John Bob Doe"
