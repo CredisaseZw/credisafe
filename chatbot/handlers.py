@@ -2577,7 +2577,9 @@ class MessageHandler:
                 LendingContract.objects
                 .filter(
                     borrower=person,
-                    status='active'
+                    status='active',
+                    due_date__lt=timezone.now()
+                    
                 )
                 .annotate(
                     total_paid=Coalesce(
