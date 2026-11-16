@@ -64,7 +64,7 @@ def _handle_credit_report_fee(payment: Payment):
 
     # CreditCheck.status must be in awaiting_payment or payment_processing
     # at this point. deliver_credit_report flips it to 'completed'.
-    bot = MessageHandler(whatsapp=WhatsAppClient())
+    bot = MessageHandler()
     bot.deliver_credit_report(credit_check, credit_check.subject)
 
     logger.info("Delivered credit report for CreditCheck %s (payment %s)",
