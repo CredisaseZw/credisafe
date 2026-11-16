@@ -1531,53 +1531,33 @@ class MessageHandler:
                     # return True
                 if person.user_status=='id_image':
                     result = verify_id_from_image(person, media_url)
-
+                    prefix =''
                     if result["auto_verified"]:
                         import time
                         # person.user_status = 'completed'
                         # person.user_mode = 'welcome'
                         # person.save(update_fields=['user_status', 'user_mode'])
-                        time.sleep(3)
-                        self.whatsapp.send_message(
-                            person.phone_number,
-                            "✅ Your identity has been verified",
-                        )
-                    else:
-                        return self.whatsapp.send_message(person.phone_number, "Image received. Please enter a 4-digit pin code for future access.")
-                        pass
+                        prefix = "✅ Your ID has been verified. "
+                        
                     if not person.otp_code:
                         person.user_status = "otp_setup"
                         person.save(update_fields=['user_status'])
-                        # person.user_status = 'verification_hold'
-                        # person.save(update_fields=['user_status'])
-                        # self.whatsapp.send_message(
-                        #     person.phone_number,
-                        #     "We couldn't automatically verify your ID. "
-                        #     "Our team will review it manually and get back to you shortly.",
-                        # )
+                    return self.whatsapp.send_message(person.phone_number, f"{prefix}Please enter a 4-digit pin code for future access.")
+                        
                 else:
                     person.user_status='id_image'
                     person.save(update_fields=['user_status'])
-                    self.whatsapp.send_message(person.phone_number, "Image received, now send a picture of the ID only")
+                    self.whatsapp.send_message(person.phone_number, "Got it, now send a picture of your national ID")
                     
                 
                         
             if message_text.lower() in ["confirm", "yes","1."]:
-                media_sent =self.whatsapp.send_media(
-                person.phone_number,
-                    "image",
-                    "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
-                    "Please send a picture holding your National ID card like this"
+                
+                return self.whatsapp.send_message(
+                    person.phone_number,
+                    "Please take a selfie and send the image to us for verification."
                 )
-                if media_sent is None:
-                    return self.whatsapp.send_message(
-                        person.phone_number,
-                        "Please send a picture holding your National ID card"
-                    )
-                # else:
-                #     person.save(update_fields=['user_status', 'user_mode'])
-                #     self.whatsapp.send_message(person.phone_number, "Got it! Your details are currently being verified, you'll be notified when completed.")
-                #     return True
+              
             elif message_text == '2' or message_text.lower() in ["edit", "no","2."]:
                 person.user_mode = "edit_profile"
                 person.save(update_fields=['user_mode'])
