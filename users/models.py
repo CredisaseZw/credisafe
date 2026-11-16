@@ -125,6 +125,7 @@ class Person(models.Model):
         ('otp_setup', 'Awaiting OTP Setup'),
         ('full_name', 'Awaiting Full Name'),
         ('dob', 'Awaiting Date of Birth'),
+        ('id_image', 'Awaiting ID Image'),
         ('add_address', 'Adding Address'),
         ('edit_address', 'Editing Address'),
         ('edit_phone_number', 'Editing Phone Number'),
