@@ -1101,7 +1101,11 @@ class MessageHandler:
         try:
             contract_amount = contract.amount
             # amount  = getattr(service, 'amount', settings.CREDIT_ACCEPTANCE_FEE_AMOUNT)
-            amount = max(contract_amount * 0.02, 1.00)
+            # amount = max(contract_amount * 0.02, 1.00)
+            amount = max(
+                contract_amount * Decimal("0.02"),
+                Decimal("1.00")
+            )
             currency = getattr(contract, 'currency', settings.CREDIT_ACCEPTANCE_FEE_CURRENCY)
             payment = PaymentService.charge(
                 phone_number=payment_phone_number,
