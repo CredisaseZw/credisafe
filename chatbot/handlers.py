@@ -1124,9 +1124,10 @@ class MessageHandler:
                 },
             )
         except Exception as exc:
+            print(f"Error charging lender for activation fee: {exc}")
             self.whatsapp.send_message(
                 person.phone_number,
-                f"Could not start the payment: {exc}. Please try again or reply 'cancel'."
+                f"Could not start the payment. Please try again or reply 'cancel'."
             )
             return False
 
