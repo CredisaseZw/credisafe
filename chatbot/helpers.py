@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def get_whatsapp_payments_options(lender, message_to_send):
     from chatbot.whatsapp_client import WhatsAppClient
     whatsapp = WhatsAppClient()
@@ -201,3 +204,38 @@ def welcome():
     )
 
     return message
+
+from datetime import datetime, date
+
+def validate_dob(message_text):
+    formats = [
+        "%d %B %Y",   # 4 July 1990
+        "%d %b %Y",   # 4 Jul 1990
+        "%d/%m/%Y",   # 04/07/1990
+        "%d-%m-%Y",   # 04-07-1990
+        "%Y-%m-%d",   # 1990-07-04
+    ]
+
+    dob = None
+
+    for fmt in formats:
+        try:
+            dob = datetime.strptime(message_text.strip(), fmt).date()
+            break
+        except ValueError:
+            continue
+
+    if not dob:
+        return None
+
+    today = date.today()
+
+    # Calculate age accurately
+    age = today.year - dob.year - (
+        (today.month, today.day) < (dob.month, dob.day)
+    )
+
+    if age < 18:
+        return None
+
+    return dob

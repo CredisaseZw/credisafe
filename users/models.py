@@ -73,6 +73,7 @@ class Person(models.Model):
     phone_number = models.CharField(max_length=15, unique=True,null=True, db_index=True)
     national_id = models.CharField(max_length=20, unique=True, db_index=True, null=True, blank=True)
     full_name = models.CharField(max_length=200, null=True, blank=True)
+    dob=models.DateField(null=True, blank=True)
     uploader = models.ForeignKey(
         'Person',
         on_delete=models.CASCADE,
@@ -123,11 +124,13 @@ class Person(models.Model):
         ('otp_confirmation', 'Awaiting OTP Confirmation'),
         ('otp_setup', 'Awaiting OTP Setup'),
         ('full_name', 'Awaiting Full Name'),
+        ('dob', 'Awaiting Date of Birth'),
         ('add_address', 'Adding Address'),
         ('edit_address', 'Editing Address'),
         ('edit_phone_number', 'Editing Phone Number'),
         ('edit_national_id', 'Editing National ID'),
         ('edit_full_name', 'Editing Full Name'),
+        ('edit_dob', 'Editing Date of Birth'),
         ('phone_number', 'Awaiting Phone Number'),
         ('phone_verification', 'Awaiting Phone Verification'),
         ('request_borrower_info', 'Requesting Borrower Payment Information'),
@@ -135,6 +138,7 @@ class Person(models.Model):
         ('borrower_phone', 'Awaiting Borrower Phone Number'),
         ('give_credit', 'Awaiting Credit Details'),
         ('borrower_full_name', 'Awaiting Borrower Full Name'),
+        ('borrower_dob','Borrower Date of Birth'),
         ('borrower_address', 'Awaiting Borrower Address'),
         ('credit_review', 'Viewing Credit History'),
         ('lend_amount', 'Entering Lend Amount'),

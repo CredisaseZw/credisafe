@@ -451,7 +451,7 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment prompt of {payment.amount} {payment.currency} for your Credi Enquiry has been sent to {payment_phone_number}."
+            f"A payment prompt of {payment.amount} {payment.currency} to Yala for your Credi Enquiry has been sent to {payment_phone_number}."
             f"Please check your phone screen for the {last_payment_method} pop-up prompt and enter your PIN to approve."
         )
         return True
@@ -1014,7 +1014,7 @@ class MessageHandler:
         message_to_send=(
             f"{contract.borrower.full_name} ({contract.borrower.national_id}) "
             f"has accepted your credit of {contract.currency}{contract.amount}.\n\n"
-            f"To activate the contract, a fee of {currency} {amount} is required. "
+            f"To activate the contract, a fee of {currency} {amount} to Yala is required. "
             f"Please select a payment method below or reply 'cancel' to cancel."
         )
         get_whatsapp_payments_options(lender, message_to_send)
@@ -1299,7 +1299,7 @@ class MessageHandler:
 
             person.mentioned_name = name
             person.full_name = name
-            person.user_status = 'add_address'
+            person.user_status = 'dob'
 
             person.save(update_fields=[
                 'mentioned_name',
@@ -1309,10 +1309,35 @@ class MessageHandler:
 
             self.whatsapp.send_interactive_buttons(
                 person.phone_number,
-                "Please add residential address in the format: street, suburb, city, country.\n\nFor example:\n12 Grade close, Ascot, Bulawayo"
+                "Please add your date of birth in the format DD/MM/YYYY.\n\nFor example:\n30/07/1990"
             )
             return True
         
+        elif person.user_status =="dob":
+            from .helpers import validate_dob
+            dob = validate_dob(message_text.strip())
+            if not dob:
+                self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Invalid date of birth or you must be at least 18 years old. "
+                    "Please enter a valid date of birth in DD/MM/YYYY format. "
+                    "e.g. 30/06/1990"
+                )
+                return False
+
+            person.dob = dob
+            person.user_status = 'add_address'
+
+            person.save(update_fields=[
+                'dob',
+                'user_status'
+            ])
+
+            self.whatsapp.send_interactive_buttons(
+                person.phone_number,
+                "Please add residential address in the format: street, suburb, city, country.\n\nFor example:\n12 Grade close, Ascot, Bulawayo"
+            )
+            return True
         
         # =========================================================
         # STEP 4: ADDRESS CHECK
@@ -1373,23 +1398,29 @@ class MessageHandler:
         # =========================================================
 
         elif person.user_mode == "edit_profile":
-            if message_text == '1':
+            if message_text.lower() == 'name':
                 person.user_status = "edit_full_name"
                 person.user_mode = "signup"
                 person.save(update_fields=['user_status','user_mode'])
                 self.whatsapp.send_interactive_buttons(person.phone_number, "Please type your full Firstname and Surname")
                 return True
-            elif message_text == '2':
+            elif message_text.lower() == 'id number':
                 person.user_status = "edit_national_id"
                 person.user_mode = "signup"
                 person.save(update_fields=['user_status','user_mode'])
                 self.whatsapp.send_interactive_buttons(person.phone_number, "Please type your National ID number")
                 return True
-            elif message_text == '3':
+            elif message_text.lower() == 'address':
                 person.user_status = "edit_address"
                 person.user_mode = "signup"
                 person.save(update_fields=['user_status','user_mode'])
                 self.whatsapp.send_interactive_buttons(person.phone_number, "Please add residential address in the format: street/house number, suburb, city, country.\n\nFor example:\n12 Churchill Ave, Alex Park, Harare")
+                return True
+            elif message_text.lower()=='dob':
+                person.user_status = "edit_dob"
+                person.user_mode = "signup"
+                person.save(update_fields=['user_status','user_mode'])
+                self.whatsapp.send_interactive_buttons(person.phone_number, "Please add your date of birth in the format DD/MM/YYYY.\n\nFor example:\n30/07/1990")
                 return True
         
         elif person.user_status == 'edit_full_name':
@@ -1403,7 +1434,12 @@ class MessageHandler:
             person.full_name = name
             person.user_status = 'verify_details'
             person.save(update_fields=['full_name','user_status'])
-            self.whatsapp.send_message(person.phone_number, "Name updated successfully")
+            buttons =[
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Exit'},
+            ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, "Name updated successfully, Confirm if everything else is correct.", buttons)
             return True
 
         elif person.user_status == 'edit_national_id':
@@ -1417,7 +1453,12 @@ class MessageHandler:
             person.national_id = nid
             person.user_status = 'verify_details'
             person.save(update_fields=['national_id','user_status'])
-            self.whatsapp.send_message(person.phone_number, "National ID updated successfully")
+            buttons =[
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Exit'},
+            ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, "National ID updated successfully, Confirm if everything else is correct.", buttons)
             return True
 
         elif person.user_status == 'edit_address':
@@ -1431,9 +1472,37 @@ class MessageHandler:
             person.address = address
             person.user_status = 'verify_details'
             person.save(update_fields=['address','user_status'])
-            self.whatsapp.send_message(person.phone_number, "Address updated successfully")
+            buttons =[
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Exit'},
+            ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, "Address updated successfully, Confirm if everything else is correct.", buttons)
             return True
 
+        elif person.user_status =='edit_dob':
+            from .helpers import validate_dob
+            dob = validate_dob(message_text.strip())
+            if not dob:
+                self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Invalid date of birth or you must be at least 18 years old. "
+                    "Please enter a valid date of birth in DD/MM/YYYY format. "
+                    "e.g. 30/06/1990"
+                )
+                return False
+
+            person.dob = dob
+            person.user_status = 'verify_details'
+            person.save(update_fields=['dob','user_status'])
+            buttons = [
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Exit'},
+                
+            ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, "Date of Birth updated successfully, Confirm if everything else is correct.", buttons)
+            return True
         # =========================================================
         # STEP 6: VERIFY DETAILS
         # =========================================================
@@ -1502,6 +1571,7 @@ class MessageHandler:
                     {'id': '1', 'title': 'Name'},
                     {'id': '2', 'title': 'ID Number'},
                     {'id': '3', 'title': 'Address'},
+                    {'id':'4','title':"DOB"},
                     {'id': 'back', 'title': 'Back'},
                     {'id': 'exit', 'title': 'Exit'},
                 ]
@@ -1863,10 +1933,32 @@ class MessageHandler:
                     'mentioned_name': full_name,
                 }
             )
-            person.user_status = 'borrower_address'
+            person.user_status = 'borrower_dob'
             person.save()
             
-            message =f"Please type address for {full_name} in the format;\n\n12 Grade close, Mukumba, Marondera\n\n> reply exit to return to main menu"
+            message =f"Please type date of birth for {full_name} in the format;\n\n30/06/1990"
+            self.whatsapp.send_interactive_buttons(person.phone_number, message)
+            return True
+        
+        elif person.user_status == 'borrower_dob':
+            from .helpers import validate_dob
+            dob = validate_dob(message_text.strip())
+            if not dob:
+                self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    f"Invalid date of birth or {borrower_ob.full_name} be at least 18 years old. "
+                    "Please enter a valid date of birth in DD/MM/YYYY format. "
+                    "e.g. 30/06/1990"
+                )
+                return False
+
+            if borrower_ob:
+                borrower_ob.dob = dob
+                borrower_ob.save(update_fields=['dob'])
+            
+            person.user_status = 'borrower_address'
+            person.save(update_fields=['user_status'])
+            message = f"Please type address for {full_name} in the format;\n\n1. 12 Grade close, Winston Park, Marondera\n2. Sadza village, Ward 20, Chivhu"
             self.whatsapp.send_interactive_buttons(person.phone_number, message)
             return True
         
@@ -1940,6 +2032,7 @@ class MessageHandler:
                 subject_details = (
                     "Do you accept addition of your details below to Credi as a user?\n\n"
                     f"Name: {borrower_ob.full_name}\n"
+                    f"Date of Birth: {borrower_ob.dob.strftime('%d/%m/%Y') if borrower_ob.dob else 'N/A'}\n"
                     f"ID Number: {borrower_ob.national_id}\n"
                     f"Address: {borrower_ob.address}\n"
                     f"Mobile Number: {borrower_ob.phone_number}\n\n"

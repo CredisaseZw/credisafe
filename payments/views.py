@@ -7,18 +7,19 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-
 from payments.services import PaymentService
-
 from .client import FinivexClient, FinivexError
 from .models import Payment
 from .signals import payment_status_changed
-
+from rest_framework.decorators import authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
 @require_POST
+@authentication_classes([])
+@permission_classes([AllowAny])
 def finivex_webhook(request):
     # --- 1. Parse --------------------------------------------------------
     try:
