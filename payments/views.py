@@ -21,13 +21,17 @@ logger = logging.getLogger(__name__)
 @authentication_classes([])
 @permission_classes([AllowAny])
 def finivex_webhook(request):
+    from django.conf import settings
     # --- 1. Parse --------------------------------------------------------
     try:
         payload = json.loads(request.body.decode() or "{}")
     except ValueError:
         print("Webhook: invalid JSON: %r", request.body[:300])
         return JsonResponse({"ok": False, "error": "invalid json"}, status=400)
-
+    webhook_secret = request.headers.get("X-PG-Signature")
+    if webhook_secret != settings.FINIVEX_WEBHOOK_SECRET:
+        print("Webhook: invalid secret: %r", webhook_secret)
+        return JsonResponse({"ok": False, "error": "invalid secret"}, status=403)
     print("Webhook received: %s", payload)
 
     # --- 2. Route to payment --------------------------------------------

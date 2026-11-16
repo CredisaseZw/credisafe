@@ -300,7 +300,7 @@ FINIVEX_WIDGET_URL = "https://gateway.finivex.online/api/pg/v1/payments/widget-s
 
 # Where Finivex should POST webhooks
 FINIVEX_WEBHOOK_URL = os.getenv("FINIVEX_WEBHOOK_URL", "https://credi-safe.com/api/payments/webhook/")
-
+FINIVEX_WEBHOOK_SECRET = os.getenv("FINIVEX_WEBHOOK_SECRET") # whsec_...
 # Poll interval (seconds) for the background task
 FINIVEX_POLL_INTERVAL = 60
 FINIVEX_POLL_MAX_AGE_HOURS = 24   # stop polling payments older than thisN
