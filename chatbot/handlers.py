@@ -1099,9 +1099,10 @@ class MessageHandler:
         payment_phone_number = person.get_session_key(f'{method}_number', person.phone_number)
 
         try:
-            service = ServiceFee.objects.filter(service_type='credit_activation_fee').last()
-            amount  = getattr(service, 'amount') if service else settings.CREDIT_ACCEPTANCE_FEE_AMOUNT
-            currency = getattr(service, 'currency') if service else settings.CREDIT_ACCEPTANCE_FEE_CURRENCY
+            contract_amount = contract.amount
+            # amount  = getattr(service, 'amount', settings.CREDIT_ACCEPTANCE_FEE_AMOUNT)
+            amount = max(contract_amount * 0.02, 1.00)
+            currency = getattr(contract, 'currency', settings.CREDIT_ACCEPTANCE_FEE_CURRENCY)
             payment = PaymentService.charge(
                 phone_number=payment_phone_number,
                 amount=amount,
