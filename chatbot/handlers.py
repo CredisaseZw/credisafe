@@ -2425,7 +2425,7 @@ class MessageHandler:
         if not person.is_verified:
             self.whatsapp.send_message(
                 person.phone_number,
-                "Finish signup to use the Credi services."
+                "Finish signup to use the Credi services or contact 0715239711 for assistance"
             )
             return False
 
