@@ -64,7 +64,8 @@ INSTALLED_APPS = [
     'chatbot',
     'credit',
     'api',
-    'payments',
+    # 'payments',
+    'payments.apps.PaymentsConfig',
 ]
 
 MIDDLEWARE = [
