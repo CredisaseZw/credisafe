@@ -1537,7 +1537,7 @@ class MessageHandler:
                         # person.user_status = 'completed'
                         # person.user_mode = 'welcome'
                         # person.save(update_fields=['user_status', 'user_mode'])
-                        time.sleep(5)
+                        time.sleep(3)
                         self.whatsapp.send_message(
                             person.phone_number,
                             "✅ Your identity has been verified",
