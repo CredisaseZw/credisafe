@@ -896,6 +896,7 @@ class MessageHandler:
                 else:
                     title_one = "Exit"
                 message_to_creditor = f"{person.full_name} - {person.national_id} is now a user on Credi\n\n"
+                # self.whatsapp.send_message(uploader.phone_number, message_to_creditor)
                 return self.show_main_menu(uploader,welcome_message=message_to_creditor,title_one=title_one)
             return True
         elif message_text.lower() in ["2", "2.", "edit","edit details"]:
@@ -977,13 +978,12 @@ class MessageHandler:
         person.set_session_data("pending_contract_to_confirm_id", None)
         person.user_mode = "welcome"
         person.save(update_fields=["user_mode"])
-
+        self.whatsapp.send_message(
+            person.phone_number,
+            f"You have accepted the credit from {contract.lender.full_name}."
+        )
         self.show_main_menu(
             person,
-            f"You have accepted the credit from {contract.lender.full_name}. "
-            # + ("The lender has been asked to pay the activation fee."
-            # if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED
-            # else "The contract is now active.")
         )
 
         if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED:
@@ -1519,24 +1519,11 @@ class MessageHandler:
                 return True
             if "[Image]" in message_text:
                 from chatbot.id_verification import verify_id_from_image
-                # self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify your details.")
-            
-                # media_url must be passed through from the webhook
-                # if not media_url:
-                #     self.whatsapp.send_message(
-                #         person.phone_number,
-                #         "We couldn't process the image. Please wait while the team reviews .",
-                #     )
-                #     return
-                    # return True
+
                 if person.user_status=='id_image':
-                    result = verify_id_from_image(person, media_url)
+                    result = verify_id_from_image(person)
                     prefix =''
                     if result["auto_verified"]:
-                        import time
-                        # person.user_status = 'completed'
-                        # person.user_mode = 'welcome'
-                        # person.save(update_fields=['user_status', 'user_mode'])
                         prefix = "✅ Your ID has been verified. "
                         
                     if not person.otp_code:
@@ -2011,18 +1998,13 @@ class MessageHandler:
                 self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify the details.")
                 return True
             if message_text.lower() in ["1", "yes","1.","confirm"]:
-                media_sent =self.whatsapp.send_media(
-                    person.phone_number,
-                    "image",
-                    "https://pub-8fbfebaf851945ab8d216920b749e37f.r2.dev/idcard.jpeg",
-                    "Information saved successfully, please send a picture of the subject holding their ID card like this."
-                )
-                if media_sent is None:
-                    message = "Information saved successfully, please send a selfie of the subject holding their ID card."
-                    self.whatsapp.send_message(person.phone_number, message)
+                
+                message = f"Information saved successfully, please send a picture of {full_name}'s National ID card.\n >You are required to verify that {full_name} is the real owner of the ID they've shown you."
+                self.whatsapp.send_message(person.phone_number, message)
                 
                 borrower_ob.user_mode = 'borrower_confirmation'
-                borrower_ob.save(update_fields=['user_mode'])
+                borrower_ob.is_verified=True
+                borrower_ob.save(update_fields=['user_mode','is_verified'])
 
                 subject_details = (
                     "Do you accept addition of your details below to Credi as a user?\n\n"
@@ -2771,20 +2753,25 @@ class MessageHandler:
         if person.oldest_creditor:
             report += f"\n🏦 *Oldest Creditor:* {person.oldest_creditor}\n"
             report += f"💰 *Amount Owed:* {person.currency} {float(person.amount_owed):.2f}\n"
-            whatsapp_message = (
-                f"Hi, I'm {person.full_name or 'N/A'}, "
-                f"ID Number: {person.national_id}. "
-                "I have checked my credit status and would like "
-                "assistance with clearing my name. "
-                "Please guide me through the process. Thank you."
-            )
+            if is_self_check:
+                whatsapp_message = (
+                    f"Hi, I'm {person.full_name or 'N/A'}, "
+                    f"ID Number: {person.national_id}. "
+                    "I have checked my credit status and would like "
+                    "assistance with clearing my name. "
+                    "Please guide me through the process. Thank you."
+                )
+                whatsapp_number = "263715239711"
 
-            whatsapp_number = "263715239711"
+                whatsapp_link = (
+                    f"https://wa.me/{whatsapp_number}"
+                    f"?text={quote(whatsapp_message)}"
+                )
+            else:
+                whatsapp_link = (
+                    f"For assistance with clearing these records, contact us here: +263715239711"
+                )
 
-            whatsapp_link = (
-                f"https://wa.me/{whatsapp_number}"
-                f"?text={quote(whatsapp_message)}"
-            )
 
             report += f"\n\n📲 *For clearance assistance click here:*\n{whatsapp_link}"
         

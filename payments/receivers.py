@@ -1,4 +1,5 @@
 # payments/receivers.py
+import time
 import logging
 
 from django.dispatch import receiver
@@ -75,6 +76,7 @@ def _handle_credit_acceptance_fee(payment: Payment):
     """Lender paid the activation fee — activate the contract and notify both."""
     from credit.models import LendingContract
     from chatbot.whatsapp_client import WhatsAppClient
+    from chatbot.handlers import MessageHandler
 
     contract = LendingContract.objects.filter(
         payment_reference=payment.reference
@@ -101,6 +103,9 @@ def _handle_credit_acceptance_fee(payment: Payment):
         f"({contract.borrower.national_id}) for "
         f"{contract.currency.upper()}{contract.amount} is now active."
     )
+    bot = MessageHandler()
+    time.sleep(2)
+    bot.show_main_menu(contract.borrower)
 
 _HANDLERS = {
     "credit_report_fee":     _handle_credit_report_fee,

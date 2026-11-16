@@ -72,7 +72,10 @@ def whatsapp_webhook(request):
                     person = Person.objects.filter(
                                         phone_number=from_number,
                                     ).first()
-                    borrower_id = person.session_data.get('borrower_national_id',None)
+                    borrower_id = None
+                        
+                    if person:
+                        borrower_id = person.session_data.get('borrower_national_id',None)
                     borrower_ob = Person.objects.filter(
                                         national_id=borrower_id,
                                     ).first()
