@@ -913,8 +913,9 @@ class MessageHandler:
         
         elif message_text.lower() in ["3.", "3","reject"]:
             person.verification_status = "rejected"
+            person.is_active=False
             person.user_mode ="addition_aborted"
-            person.save(update_fields=["verification_status","user_mode"])
+            person.save(update_fields=["verification_status","user_mode","is_active"])
             message_to_subject = "You rejected adding your details to Credi. Please contact us at 0715239711 if you decided otherwise or if you have any questions."
             self.whatsapp.send_message(person.phone_number, message_to_subject)
             if uploader:
