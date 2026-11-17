@@ -1,6 +1,8 @@
 # payments/views.py
 import json
 import logging
+import hmac
+import hashlib
 
 from django.db import transaction
 from django.http import JsonResponse
@@ -13,27 +15,45 @@ from .models import Payment
 from .signals import payment_status_changed
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
+from django.conf import settings
 logger = logging.getLogger(__name__)
-
 
 @csrf_exempt
 @require_POST
 @authentication_classes([])
 @permission_classes([AllowAny])
 def finivex_webhook(request):
-    from django.conf import settings
-    # --- 1. Parse --------------------------------------------------------
+
+    # 1. Get signature
+    received_signature = request.headers.get("X-PG-Signature", "")
+
+    # 2. Remove v1= prefix
+    if received_signature.startswith("v1="):
+        received_signature = received_signature[3:]
+
+    # 3. Generate expected signature
+    expected_signature = hmac.new(
+        settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
+        request.body,
+        hashlib.sha256
+    ).hexdigest()
+
+    # 4. Verify signature
+    if not hmac.compare_digest(expected_signature, received_signature):
+        print("Webhook: Invalid signature")
+        return JsonResponse(
+            {"ok": False, "error": "Invalid signature"},
+            status=403
+        )
+
+    # 5. Parse JSON only after signature verification
     try:
-        payload = json.loads(request.body.decode() or "{}")
-    except ValueError:
-        print("Webhook: invalid JSON: %r", request.body[:300])
-        return JsonResponse({"ok": False, "error": "invalid json"}, status=400)
-    webhook_secret = request.headers.get("X-PG-Signature")
-    
-    print("Webhook: invalid secret: %r", webhook_secret)
-    # if webhook_secret != settings.FINIVEX_WEBHOOK_SECRET:
-        # return JsonResponse({"ok": False, "error": "invalid secret"}, status=403)
-    print("Webhook received: %s", payload)
+        payload = json.loads(request.body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse(
+            {"ok": False, "error": "Invalid JSON"},
+            status=400
+        )
 
     # --- 2. Route to payment --------------------------------------------
     reference = payload.get("transactionId") or payload.get("reference")
