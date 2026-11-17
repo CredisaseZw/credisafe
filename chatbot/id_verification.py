@@ -6,6 +6,7 @@ from io import BytesIO
 
 import requests
 import pytesseract
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 from PIL import Image
 
