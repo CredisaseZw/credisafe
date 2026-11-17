@@ -33,6 +33,15 @@ def finivex_webhook(request):
     # 3. Generate expected signature
     expected_signature = settings.FINIVEX_WEBHOOK_SECRET
 
+    expected = hmac.new(
+        settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
+        request.body,
+        hashlib.sha256
+    ).hexdigest()
+
+    print("Received:", received_signature)
+    print("Expected:", expected)
+    print("Match:", hmac.compare_digest(received_signature, expected))
     # 4. Verify signature
     if not hmac.compare_digest(expected_signature, received_signature):
         print("Webhook: Invalid signature", "expected:", expected_signature, "received:", received_signature)
