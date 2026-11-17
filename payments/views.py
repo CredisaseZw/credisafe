@@ -31,11 +31,7 @@ def finivex_webhook(request):
     if received_signature.startswith("v1="):
         received_signature = received_signature[3:]
     # 3. Generate expected signature
-    expected_signature = hmac.new(
-        settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
-        request.body,
-        hashlib.sha256
-    ).hexdigest()
+    expected_signature = settings.FINIVEX_WEBHOOK_SECRET
 
     # 4. Verify signature
     if not hmac.compare_digest(expected_signature, received_signature):
