@@ -3,6 +3,7 @@ import json
 import logging
 import hmac
 import hashlib
+import time
 
 from django.db import transaction
 from django.http import JsonResponse
@@ -24,38 +25,61 @@ logger = logging.getLogger(__name__)
 @permission_classes([AllowAny])
 def finivex_webhook(request):
 
-    # 1. Get signature
-    
-    received_signature = request.headers.get("X-PG-Signature", "").strip()
+    # 1. Get signature and timestamp
+    received_signature = request.headers.get("X-PG-Signature", "")
+    timestamp = request.headers.get("X-PG-Timestamp", "")
 
-    if received_signature.startswith("v1="):
-        received_signature = received_signature[3:]
+    # 2. Validate required headers
+    if not received_signature or not timestamp:
+        return JsonResponse(
+            {"ok": False, "error": "Missing signature or timestamp"},
+            status=403
+        )
 
-    secret = settings.FINIVEX_WEBHOOK_SECRET
+    # 3. Validate timestamp
+    try:
+        timestamp_int = int(timestamp)
+    except (ValueError, TypeError):
+        return JsonResponse(
+            {"ok": False, "error": "Invalid timestamp"},
+            status=403
+        )
 
+    current_time = int(time.time())
+
+    if abs(current_time - timestamp_int) > 300:
+        return JsonResponse(
+            {"ok": False, "error": "Webhook timestamp expired"},
+            status=403
+        )
+
+    # 4. Construct signing message
+    message = timestamp.encode("utf-8") + b"." + request.body
+
+    # 5. Calculate HMAC-SHA256
     expected_signature = hmac.new(
-        secret.encode("utf-8"),
-        request.body,
+        settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
+        message,
         hashlib.sha256
     ).hexdigest()
 
-    print("Webhook signature diagnostics:")
-    print("Secret loaded:", bool(secret))
-    print("Secret length:", len(secret) if secret else 0)
-    print("Body length:", len(request.body))
-    print("Body SHA256:", hashlib.sha256(request.body).hexdigest())
-    print("Received signature:", received_signature)
-    print("Calculated signature:", expected_signature)
-    print("Match:", hmac.compare_digest(
-        expected_signature,
-        received_signature
-    ))
+    # 6. Construct expected header
+    expected_header = "v1=" + expected_signature
 
-    if not hmac.compare_digest(expected_signature, received_signature):
-        return JsonResponse({"ok": False}, status=403)
+    # 7. Compare signatures
+    if not hmac.compare_digest(
+        expected_header,
+        received_signature
+    ):
+        print("Webhook: Invalid signature")
+        return JsonResponse(
+            {"ok": False, "error": "Invalid signature"},
+            status=403
+        )
 
     print("Webhook: Signature verified successfully")
-    # 5. Parse JSON only after signature verification
+
+    # 8. Parse payload
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
