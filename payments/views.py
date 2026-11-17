@@ -30,7 +30,6 @@ def finivex_webhook(request):
     # 2. Remove v1= prefix
     if received_signature.startswith("v1="):
         received_signature = received_signature[3:]
-
     # 3. Generate expected signature
     expected_signature = hmac.new(
         settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
@@ -40,7 +39,7 @@ def finivex_webhook(request):
 
     # 4. Verify signature
     if not hmac.compare_digest(expected_signature, received_signature):
-        print("Webhook: Invalid signature")
+        print("Webhook: Invalid signature", "expected:", expected_signature, "received:", received_signature)
         return JsonResponse(
             {"ok": False, "error": "Invalid signature"},
             status=403
