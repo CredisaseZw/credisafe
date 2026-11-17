@@ -77,8 +77,6 @@ def finivex_webhook(request):
             status=403
         )
 
-    print("Webhook: Signature verified successfully")
-
     # 8. Parse payload
     try:
         payload = json.loads(request.body.decode("utf-8"))
