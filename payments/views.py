@@ -25,29 +25,34 @@ logger = logging.getLogger(__name__)
 def finivex_webhook(request):
 
     # 1. Get signature
+    
     received_signature = request.headers.get("X-PG-Signature", "").strip()
 
-    # 2. Remove v1= prefix
     if received_signature.startswith("v1="):
         received_signature = received_signature[3:]
 
-    # 3. Generate expected HMAC
+    secret = settings.FINIVEX_WEBHOOK_SECRET
+
     expected_signature = hmac.new(
-        settings.FINIVEX_WEBHOOK_SECRET.encode("utf-8"),
+        secret.encode("utf-8"),
         request.body,
         hashlib.sha256
     ).hexdigest()
 
-    # 4. Verify signature
-    if not hmac.compare_digest(
+    print("Webhook signature diagnostics:")
+    print("Secret loaded:", bool(secret))
+    print("Secret length:", len(secret) if secret else 0)
+    print("Body length:", len(request.body))
+    print("Body SHA256:", hashlib.sha256(request.body).hexdigest())
+    print("Received signature:", received_signature)
+    print("Calculated signature:", expected_signature)
+    print("Match:", hmac.compare_digest(
         expected_signature,
         received_signature
-    ):
-        print("Webhook: Invalid signature")
-        return JsonResponse(
-            {"ok": False, "error": "Invalid signature"},
-            status=403
-        )
+    ))
+
+    if not hmac.compare_digest(expected_signature, received_signature):
+        return JsonResponse({"ok": False}, status=403)
 
     print("Webhook: Signature verified successfully")
     # 5. Parse JSON only after signature verification
