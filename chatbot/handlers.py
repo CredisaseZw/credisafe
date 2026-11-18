@@ -710,7 +710,7 @@ class MessageHandler:
         person.user_status = "receipt_person"
         person.save(update_fields=["user_status"])
         sections = [{
-            'title': 'Click on the Person paying to continue',
+            'title': 'Select Payer',
             'rows': buttons
         }]
 
