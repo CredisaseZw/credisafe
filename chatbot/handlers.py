@@ -2456,6 +2456,9 @@ class MessageHandler:
         title_two="Give Credit",
         title_three="Accounting"
     ):
+        """Display main menu options."""
+
+        from decimal import Decimal
 
         from django.db.models import (
             Sum,
@@ -2467,16 +2470,20 @@ class MessageHandler:
         )
         from django.db.models.functions import Coalesce
 
-        """Display main menu options"""
-
-        # Reset mode to offer_service
+        # ---------------------------------------------------------
+        # VERIFY PERSON
+        # ---------------------------------------------------------
         if not person.is_verified:
             self.whatsapp.send_message(
                 person.phone_number,
-                "Finish signup to use the Credi services or contact 0715239711 for assistance"
+                "Finish signup to use the Credi services or "
+                "contact 0715239711 for assistance"
             )
             return False
 
+        # ---------------------------------------------------------
+        # CHECK LAST MESSAGE
+        # ---------------------------------------------------------
         person_last_message = (
             WhatsAppMessage.objects
             .filter(person=person)
@@ -2501,35 +2508,46 @@ class MessageHandler:
 
             return True
 
+        # ---------------------------------------------------------
+        # SET USER MODE
+        # ---------------------------------------------------------
         person.user_mode = 'welcome'
         person.user_status = 'welcome'
-        person.save()
+        person.save(update_fields=['user_mode', 'user_status'])
 
         user_name = person.full_name or "there"
-        person_loans = LendingContract.objects.filter(borrower=person, status='active')
+
         if not welcome_message:
+
             welcome_message = f"*WELCOME {user_name}*\n\n"
 
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
             # CREDIT SCORE / PAYMENT STATUS
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
             credit_score = person.credit_score or 0
+
+            person_loans = LendingContract.objects.filter(
+                borrower=person,
+                status='active'
+            )
+
             if person.oldest_creditor:
                 code = "High Risk-Upper"
                 payment_status = "🔴"
+
             elif credit_score >= 800:
-                payment_status = "🔴"
                 code = "High Risk-Upper"
+                payment_status = "🔴"
 
             elif credit_score >= 600:
-                payment_status = "🟠"
                 code = "High Risk-Lower"
+                payment_status = "🟠"
 
             elif credit_score >= 300:
-                payment_status = "🟡"
                 code = "Medium Risk"
+                payment_status = "🟡"
 
-            elif person_loans.count() == 0:
+            elif not person_loans.exists():
                 code = "No Transaction History"
                 payment_status = "🔘"
 
@@ -2537,39 +2555,31 @@ class MessageHandler:
                 code = "Low Risk"
                 payment_status = "🟢"
 
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
             # CURRENCY LABELS
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
             currency_labels = {
                 'usd': 'US$',
                 'rand': 'R',
                 'zwl': 'ZWL$',
             }
 
-            # ---------------------------------------------------------
-            # CREDIT TAKEN
-            #
-            # Group by currency so we NEVER add USD + ZAR + ZWL
-            # together.
-            # ---------------------------------------------------------
-            credit_taken_by_currency = (
-                LendingContract.objects
-                .filter(
-                    borrower=person,
-                    status='active'
-                )
-                .values('currency')
-                .annotate(
-                    total=Sum('amount')
-                )
-                .order_by('currency')
+            decimal_field = DecimalField(
+                max_digits=12,
+                decimal_places=2
             )
 
-            # ---------------------------------------------------------
-            # CONFIRMED RECEIPTS
+            zero_value = Value(
+                Decimal('0.00'),
+                output_field=decimal_field
+            )
+
+            # -----------------------------------------------------
+            # CONFIRMED RECEIPTS PER CONTRACT
             #
-            # Find confirmed repayments belonging to each contract.
-            # ---------------------------------------------------------
+            # This subquery calculates the total confirmed receipts
+            # belonging to each individual lending contract.
+            # -----------------------------------------------------
             confirmed_receipts = (
                 Receipt.objects
                 .filter(
@@ -2583,58 +2593,15 @@ class MessageHandler:
                 .values('total')
             )
 
-            # ---------------------------------------------------------
-            # OWING IN ARREARS
+            # -----------------------------------------------------
+            # CREDIT TAKEN
             #
-            # For every active loan:
-            #
-            # outstanding = loan amount - confirmed repayments
-            #
-            # Then group the outstanding amounts by the loan's currency.
-            # ---------------------------------------------------------
-            owing_by_currency = (
+            # Total credit borrowed, grouped by currency.
+            # -----------------------------------------------------
+            credit_taken_by_currency = (
                 LendingContract.objects
                 .filter(
                     borrower=person,
-                    status='active',
-                    due_date__lt=timezone.now()
-                    
-                )
-                .annotate(
-                    total_paid=Coalesce(
-                        Subquery(
-                            confirmed_receipts,
-                            output_field=DecimalField(
-                                max_digits=12,
-                                decimal_places=2
-                            )
-                        ),
-                        Value(
-                            Decimal('0.00'),
-                            output_field=DecimalField(
-                                max_digits=12,
-                                decimal_places=2
-                            )
-                        )
-                    )
-                )
-                .annotate(
-                    outstanding=F('amount') - F('total_paid')
-                )
-                .values('currency')
-                .annotate(
-                    total=Sum('outstanding')
-                )
-                .order_by('currency')
-            )
-
-            # ---------------------------------------------------------
-            # CREDIT GIVEN
-            # ---------------------------------------------------------
-            credit_given_by_currency = (
-                LendingContract.objects
-                .filter(
-                    lender=person,
                     status='active'
                 )
                 .values('currency')
@@ -2644,17 +2611,92 @@ class MessageHandler:
                 .order_by('currency')
             )
 
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
+            # CREDIT OWING - OVERDUE
+            #
+            # Only overdue contracts are included.
+            # Outstanding = original amount - confirmed receipts.
+            # -----------------------------------------------------
+            owing_by_currency = (
+                LendingContract.objects
+                .filter(
+                    borrower=person,
+                    status='active',
+                    due_date__lt=timezone.now()
+                )
+                .annotate(
+                    total_paid=Coalesce(
+                        Subquery(
+                            confirmed_receipts,
+                            output_field=decimal_field
+                        ),
+                        zero_value
+                    )
+                )
+                .annotate(
+                    outstanding=F('amount') - F('total_paid')
+                )
+                .filter(
+                    outstanding__gt=0
+                )
+                .values('currency')
+                .annotate(
+                    total=Sum('outstanding')
+                )
+                .order_by('currency')
+            )
+
+            # -----------------------------------------------------
+            # CREDIT GIVEN - DEBTORS
+            #
+            # FIX:
+            # Subtract confirmed receipts from every loan given.
+            #
+            # This ensures that if you lend someone $10 and they
+            # repay $5, your outstanding debtors show $5.
+            # -----------------------------------------------------
+            credit_given_by_currency = (
+                LendingContract.objects
+                .filter(
+                    lender=person,
+                    status='active'
+                )
+                .annotate(
+                    total_paid=Coalesce(
+                        Subquery(
+                            confirmed_receipts,
+                            output_field=decimal_field
+                        ),
+                        zero_value
+                    )
+                )
+                .annotate(
+                    outstanding=F('amount') - F('total_paid')
+                )
+                .filter(
+                    outstanding__gt=0
+                )
+                .values('currency')
+                .annotate(
+                    total=Sum('outstanding')
+                )
+                .order_by('currency')
+            )
+
+            # -----------------------------------------------------
             # FORMAT CURRENCY TOTALS
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
             def format_currency_totals(currency_totals):
+
                 if not currency_totals:
                     return "-"
 
                 lines = []
 
                 for item in currency_totals:
+
                     currency = item.get('currency')
+
                     total = item.get('total') or Decimal('0.00')
 
                     currency_label = currency_labels.get(
@@ -2668,9 +2710,9 @@ class MessageHandler:
 
                 return "\n".join(lines)
 
-            # ---------------------------------------------------------
-            # FORMAT THE THREE FINANCIAL VALUES
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
+            # FORMAT FINANCIAL VALUES
+            # -----------------------------------------------------
             credit_taken_display = format_currency_totals(
                 credit_taken_by_currency
             )
@@ -2678,20 +2720,20 @@ class MessageHandler:
             owing_display = format_currency_totals(
                 owing_by_currency
             )
-            if owing_display =='-' and person.oldest_creditor:
-                owing_display = (
-                    f"{person.currency} {float(person.amount_owed):.2f}"
-                )
 
             credit_given_display = format_currency_totals(
                 credit_given_by_currency
             )
 
+            # -----------------------------------------------------
+            # HISTORICAL CREDIT FALLBACK
+            # -----------------------------------------------------
             if not credit_taken_by_currency:
 
                 credit_history = person.credit_histories.first()
 
                 if credit_history:
+
                     historical_total = (
                         credit_history.total_borrowed
                         or Decimal('0.00')
@@ -2700,57 +2742,54 @@ class MessageHandler:
                     credit_taken_display = (
                         f"{historical_total:,.2f}"
                     )
+
                 if person.oldest_creditor:
+
                     credit_taken_display = (
-                        f"{person.currency} {float(person.amount_owed):.2f}"
+                        f"{person.currency} "
+                        f"{float(person.amount_owed):,.2f}"
                     )
 
-            # ---------------------------------------------------------
+            # -----------------------------------------------------
+            # LEGACY OVERDUE FALLBACK
+            # -----------------------------------------------------
+            if owing_display == "-" and person.oldest_creditor:
+
+                owing_display = (
+                    f"{person.currency} "
+                    f"{float(person.amount_owed):,.2f}"
+                )
+
+            # -----------------------------------------------------
             # WELCOME MESSAGE
-            # ---------------------------------------------------------
-            # welcome_message_new += (
-            #     "*Your Credit Status*:\n"
-            #     "─────────────────\n"
-            #     f"{code} {payment_status}\n\n"
-            #     f"*NET STATUS*\n"
-            #     f"*Credit Owing - Total*\n"
-            #     "─────────────────\n"
-            #     f"\t{credit_taken_display}\n\n"
-            #     f"*Credit Owing - Overdue*\n"
-            #     "─────────────────\n"
-            #     f"\t{owing_display}\n\n"
-            #     f"*Credit Given*\n"
-            #     "─────────────────\n"
-            #     f"\t{credit_given_display}\n\n"
-            #     f"Options:\n"
-            # )
+            # -----------------------------------------------------
             welcome_message += (
                 "*Your Credit Status*:\n"
                 f"{code} {payment_status}\n\n"
                 "*NET STATUS*\n"
-                f"*Credit Owing - Total*\n"
+                "*Credit Owing - Total*\n"
                 f"\t{credit_taken_display}\n\n"
-                f"*Credit Owing - Overdue*\n"
+                "*Credit Owing - Overdue*\n"
                 f"\t{owing_display}\n\n"
-                f"*Debtors*\n"
+                "*Debtors*\n"
                 f"\t{credit_given_display}\n\n"
-                f"Options:\n"
+                "Options:\n"
             )
 
-        # -------------------------------------------------------------
+        # ---------------------------------------------------------
         # SEND INTERACTIVE BUTTONS
-        # -------------------------------------------------------------
+        # ---------------------------------------------------------
         buttons = [
             {
                 'id': 'lend_money',
                 'title': title_one
             },
             {
-                'id': 'accounting',
+                'id': 'give_credit',
                 'title': title_two
             },
             {
-                'id': 'give_credit',
+                'id': 'accounting',
                 'title': title_three
             }
         ]
@@ -2761,7 +2800,6 @@ class MessageHandler:
             buttons=buttons,
             header_text=None,
             footer_text="type '*help*' for usage instructions"
-            
         )
 
         return True
