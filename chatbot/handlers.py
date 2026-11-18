@@ -699,7 +699,8 @@ class MessageHandler:
 
             buttons.append({
                 'id': str(i),
-                'title': title
+                'title': title,
+                'description': f"{full_name} {national_id} {balance}"
             })
 
         buttons.extend([
