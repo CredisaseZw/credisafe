@@ -58,7 +58,9 @@ const StatusBadge = ({ children, type = 'neutral' }) => {
   };
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${styles[type]}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${styles[type]}`}
+    >
       {children}
     </span>
   );
@@ -142,9 +144,7 @@ const PersonPopup = ({
                 </p>
 
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <StatusBadge
-                    type={active ? 'success' : 'danger'}
-                  >
+                  <StatusBadge type={active ? 'success' : 'danger'}>
                     {active ? 'Active' : 'Inactive'}
                   </StatusBadge>
 
@@ -181,7 +181,6 @@ const PersonPopup = ({
 
           {/* Popup content */}
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-7">
-
             {/* Person information */}
             <section>
               <h3 className="mb-4 text-sm font-semibold text-slate-900">
@@ -305,15 +304,26 @@ const PersonPopup = ({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {!verified && verificationStatus !== 'Rejected' && (
+                {person.needs_manual_review ? (
                   <ActionButton
                     icon={CheckCircleIcon}
                     color="green"
                     disabled={busy}
-                    onClick={() => onAction('verify')}
+                    onClick={() => onAction('manual_approve')}
                   >
-                    Verify
+                    Approve
                   </ActionButton>
+                ) : (
+                  !verified && verificationStatus !== 'Rejected' && (
+                    <ActionButton
+                      icon={CheckCircleIcon}
+                      color="green"
+                      disabled={busy}
+                      onClick={() => onAction('verify')}
+                    >
+                      Verify
+                    </ActionButton>
+                  )
                 )}
 
                 {!verified && verificationStatus !== 'Rejected' && (
@@ -503,10 +513,52 @@ const PersonManagement = () => {
   // Quick actions
   // --------------------------------------------------
 
+  const refreshPersonAfterAction = async personId => {
+    await fetchData();
+
+    if (selectedPerson?.id === personId) {
+      try {
+        const updatedResponse = await api.get(`/persons/${personId}/`);
+        setSelectedPerson(updatedResponse.data);
+      } catch (err) {
+        console.error('Failed to refresh selected individual:', err);
+      }
+    }
+  };
+
+  const handleManualApproval = async person => {
+    if (!person || busy) return;
+
+    const endpoint = person.is_verified
+      ? 'approve'
+      : 'verify';
+
+    setBusy(true);
+
+    try {
+      await api.post(`/persons/${person.id}/${endpoint}/`);
+
+      await refreshPersonAfterAction(person.id);
+    } catch (err) {
+      console.error('Failed to approve individual:', err);
+
+      alert(
+        getError(err, 'Could not approve this individual.')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handlePersonAction = async name => {
-    if (!selectedPerson) return;
+    if (!selectedPerson || busy) return;
 
     const personId = selectedPerson.id;
+
+    if (name === 'manual_approve') {
+      await handleManualApproval(selectedPerson);
+      return;
+    }
 
     const confirmationMessages = {
       reject: 'Are you sure you want to reject this individual?',
@@ -526,11 +578,7 @@ const PersonManagement = () => {
     try {
       await api.post(`/persons/${personId}/${name}/`);
 
-      await fetchData();
-
-      // Keep the popup open and update its displayed person.
-      const updatedResponse = await api.get(`/persons/${personId}/`);
-      setSelectedPerson(updatedResponse.data);
+      await refreshPersonAfterAction(personId);
     } catch (err) {
       console.error(`Failed to ${name} person:`, err);
 
@@ -624,7 +672,7 @@ const PersonManagement = () => {
   };
 
   const handleDeletePerson = async person => {
-    if (!person) return;
+    if (!person || busy) return;
 
     if (
       !window.confirm(
@@ -712,7 +760,6 @@ const PersonManagement = () => {
       <AdminSidebar />
 
       <main className="min-w-0 space-y-6 p-4 sm:p-6 lg:p-8 md:ml-64">
-
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -921,6 +968,24 @@ const PersonManagement = () => {
                         {/* Actions */}
                         <td className="px-5 py-4">
                           <div className="flex items-center justify-end gap-2">
+                            {/* Manual approval quick action */}
+                            {person.needs_manual_review && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => handleManualApproval(person)}
+                                title={
+                                  person.is_verified
+                                    ? 'Approve manually reviewed individual'
+                                    : 'Verify and approve individual'
+                                }
+                                aria-label="Approve individual"
+                                className="rounded-lg border border-emerald-200 p-2 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <CheckCircleIcon className="h-4 w-4" />
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => openPersonPopup(person)}
@@ -941,9 +1006,10 @@ const PersonManagement = () => {
 
                             <button
                               type="button"
+                              disabled={busy}
                               onClick={() => handleDeletePerson(person)}
                               title="Delete individual"
-                              className="rounded-lg border border-red-200 p-2 text-red-600 transition hover:bg-red-50"
+                              className="rounded-lg border border-red-200 p-2 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                             >
                               <TrashIcon className="h-4 w-4" />
                             </button>

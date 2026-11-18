@@ -544,11 +544,6 @@ class PersonViewSet(viewsets.ModelViewSet):
             'id_verification_method',
             'updated_at'
         ])
-        
-        try:
-            whatsapp_client.show_main_menu(person,"Your account has been verified successfully! You can now access all features.")
-        except Exception as e:
-            logger.error(f"Failed to send WhatsApp message to {person.phone_number}: {e}")
         return Response(PersonSerializer(person).data)
     
     @action(detail=True, methods=['get'])
