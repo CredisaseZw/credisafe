@@ -2039,7 +2039,8 @@ class MessageHandler:
                 self.whatsapp.send_interactive_buttons(person.phone_number, f"Image received. Please wait while {borrower_ob.full_name} verify the details.")
                 borrower_ob.user_mode = 'borrower_confirmation'
                 borrower_ob.is_verified=True
-                borrower_ob.save(update_fields=['user_mode','is_verified'])
+                borrower_ob.needs_manual_review=True
+                borrower_ob.save(update_fields=['user_mode','is_verified','needs_manual_review'])
 
                 subject_details = (
                     "Do you accept addition of your details below to Credi as a user?\n\n"
