@@ -27,6 +27,7 @@ def whatsapp_webhook(request):
         direction = "incoming"
         # WHAPI webhook format
         if 'messages' in data:
+            
             for message in data['messages']:
                 # Skip if this is a status update or system message
                 if message.get('type') == 'status':
@@ -157,20 +158,31 @@ def whatsapp_webhook(request):
                 elif message_type == 'reply':
                     reply_data = message.get('reply', {})
                     reply_type = reply_data.get('type', '')
-                    
+
                     if reply_type == 'buttons_reply':
                         buttons_reply = reply_data.get('buttons_reply', {})
-                        message_text = buttons_reply.get('title', '')
-                        if not message_text:
-                            message_text = buttons_reply.get('id', '')
-                        logger.info(f"Button reply from {from_number}: {message_text}")
-                        
+
+                        title = buttons_reply.get('title', '').strip()
+                        reply_id = buttons_reply.get('id', '').strip()
+
+                        message_text = title or reply_id
+
+                        logger.info(
+                            f"Button reply from {from_number}: {message_text}"
+                        )
+
                     elif reply_type == 'list_reply':
                         list_reply = reply_data.get('list_reply', {})
-                        message_text = list_reply.get('title', '')
-                        if not message_text:
-                            message_text = list_reply.get('id', '')
-                        logger.info(f"List reply from {from_number}: {message_text}")
+
+                        title = list_reply.get('title', '').strip()
+                        description = list_reply.get('description', '').strip()
+                        reply_id = list_reply.get('id', '').strip()
+
+                        # Combine title and description if description exists
+                        message_text = {title}
+                        if description:
+                            message_text += f" {description}"
+                        
                 
                 # --- LEGACY BUTTON/LIST FORMATS ---
                 elif message_type == 'button':
