@@ -2229,13 +2229,20 @@ class MessageHandler:
                 if contract:
                     contract.amount = amount
                     contract.save()
-                response = "Select Credit Type:\n\n"
-                response += f"1. Cash\n"
-                response += f"2. Goods\n"
-                response += f"3. Service\n"
-                response += f"4. Loan\n"
-                response += f"5. Mukando\n"
-                self.whatsapp.send_message(person.phone_number, response)
+                response = "Click '*Credit Type*' below to select the credit type:\n\n"
+                buttons =[
+                    {'id': '1', 'title': 'Cash'},
+                    {'id': '2', 'title': 'Goods'},
+                    {'id': '3', 'title': 'Service'},
+                    {'id': '4', 'title': 'Loan'},
+                    {'id': '5', 'title': 'Mukando'}]
+                sections = [{
+                            'title': 'Select Credit Type',
+                            'rows': buttons
+                        }]
+                
+                self.whatsapp.send_interactive_list(
+                    person.phone_number, response, sections, "Credit Type")
                 person.user_status = 'enter_credit_type'
                 person.save()
                 return True
@@ -2248,21 +2255,21 @@ class MessageHandler:
                 response = "❌ Borrower not found. Please start over."
                 self.whatsapp.send_message(person.phone_number, response)
                 return self.show_main_menu(person)
-        
         elif person.user_status =="enter_credit_type":
-            if not message_text in ['1', '2', '3', '4', '5']:
-                response = "❌ Invalid credit type. Please enter a valid option (e.g., 1, 2, 3, 4, 5):"
+            message_text = message_text.lower().strip()
+            if not message_text in ['mukando', 'cash', 'goods', 'service', 'loan']:
+                response = "❌ Invalid credit type. Please click a valid option (e.g. cash, loan):"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
-            if message_text == '1':
+            if message_text in ['1','cash']:
                 credit_type = 'cash'
-            elif message_text == '2':
+            elif message_text in ['2','goods']:
                 credit_type = 'goods'
-            elif message_text == '3':
+            elif message_text in ['3','service']:
                 credit_type = 'service'
-            elif message_text == '4':
+            elif message_text in ['4','loan']:
                 credit_type = 'loan'
-            elif message_text == '5':
+            elif message_text in ['5','mukando']:
                 credit_type = 'mukando'
             contract.credit_type = credit_type
             contract.save()
