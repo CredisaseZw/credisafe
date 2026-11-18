@@ -179,7 +179,7 @@ def whatsapp_webhook(request):
                         reply_id = list_reply.get('id', '').strip()
 
                         # Combine title and description if description exists
-                        message_text = {title}
+                        message_text = title
                         if description:
                             message_text += f" {description}"
                         
