@@ -135,7 +135,7 @@ class MessageHandler:
         if person.is_verified and person.user_mode !='borrower_signup' and  message_text.lower() in ["hi", "hello", "hey","hie"]:
             return self.welcome_user(person)
         
-        if message_text.lower() in ["exit", "quit", "q","cancel"]:
+        if message_text.lower() in ["exit", "quit", "q","cancel","home"]:
             return self.show_main_menu(person)
         
         if (message_text
@@ -610,45 +610,63 @@ class MessageHandler:
                     balance_left = Decimal("0.00")
                 
                 self.whatsapp.send_message(person.phone_number, "Receipt confirmed successfully.")
+                time.sleep(2)
+                self.show_main_menu(person)
                 borrower_ob = contract.borrower
                 borrower_credit_history = self.get_credit_history(borrower_ob)
                 borrower_payment_status = borrower_credit_history.get('default_risk', 'Low Risk')
                 message_to_borrower = f"Hi {borrower_ob.full_name}. This is confirmation of your payment of {receipt.currency}{receipt.amount} to {contract.lender.full_name} balance left is {receipt.currency}{balance_left}. Your payment status is {borrower_payment_status}."
-                return self.whatsapp.send_message(borrower_ob.phone_number, message_to_borrower)
+                self.whatsapp.send_message(borrower_ob.phone_number, message_to_borrower)
+                time.sleep(3)
+                return self.show_main_menu(borrower_ob)
         
         
         credits_given = LendingContract.objects.filter(
             lender=person,
             status="active"
         ).order_by("created_at")
+        
         # If the user has replied with a number
-        if message_text.isdigit():
-            choice = int(message_text)
 
-            # Convert QuerySet to a list
-            credits = list(credits_given)
 
-            if 1 <= choice <= len(credits):
-                selected_credit = credits[choice - 1]  # because lists are 0-based
 
-                borrower = selected_credit.borrower
-                national_id = borrower.national_id
+        #Extract national ID from the selected WhatsApp row text
+        if person.user_status =='receipt_person':
+            from .validators import extract_national_id
+            national_id = extract_national_id(message_text)
+            if national_id:
+                selected_credit = next(
+                    (
+                        credit for credit in credits
+                        if credit.borrower.national_id == national_id
+                    ),
+                    None
+                )
 
-                # Do whatever you need
+                if selected_credit:
+                    borrower = selected_credit.borrower
+
+                    self.whatsapp.send_message(
+                        person.phone_number,
+                        f"Please enter receipt date from {borrower.full_name} ({borrower.national_id}) "
+                        f"\ne.g. 30/7/2026 for `30th July 2026`"
+                    )
+
+                    person.user_status = "receipt_date"
+                    person.set_session_data(
+                        "selected_credit_to_receipt",
+                        selected_credit.id
+                    )
+                    person.save()
+                    return
+
+            else:
+            # No matching ID or credit found
                 self.whatsapp.send_message(
                     person.phone_number,
-                    f"Please enter receipt date from {borrower.full_name} ({national_id}) \ne.g. 30/7/2026 for `30th July 2026`)"
+                    "Invalid selection. Please select a person from the list and try again or manually enter their national ID."
                 )
-                person.user_status = "receipt_date"
-                person.set_session_data("selected_credit_to_receipt", selected_credit.id)
-                person.save()
                 return
-
-            self.whatsapp.send_message(
-                person.phone_number,
-                "Invalid selection. Please choose a valid number."
-            )
-            return
 
         # Otherwise send the menu
         receipt_menu = "Please select the credit number to receipt from the list below\n"
@@ -664,16 +682,43 @@ class MessageHandler:
             person.save(update_fields=["user_mode"])
             return self.show_main_menu(person)
 
+        
+        buttons = []
+
         for i, credit in enumerate(credits, start=1):
-            receipt_menu += (
-                f"{i}. {credit.borrower.full_name}"
-                f" ({credit.borrower.national_id})"
-                f" - {credit.currency}{credit.amount}\n"
-            )
+            full_name = credit.borrower.full_name.strip().split()
 
-        receipt_menu += "\nOther\nBack\nExit"
+            first_name = full_name[0]
+            last_initial = f"{full_name[-1][0]}." if len(full_name) > 1 else ""
 
-        return self.whatsapp.send_message(person.phone_number, receipt_menu)
+            name = f"{first_name} {last_initial}".strip()
+            national_id = str(credit.borrower.national_id).strip()
+            balance = f"{credit.currency}{credit.amount}"
+
+            title = f"{name} {national_id} {balance}"
+
+            buttons.append({
+                'id': str(i),
+                'title': title
+            })
+
+        buttons.extend([
+            {'id': 'back', 'title': 'Back'},
+            {'id': 'exit', 'title': 'Exit'}
+        ])
+        person.user_status = "receipt_person"
+        person.save(update_fields=["user_status"])
+        sections = [{
+            'title': 'Click on the Person paying to continue',
+            'rows': buttons
+        }]
+
+        return self.whatsapp.send_interactive_list(
+            person.phone_number,
+            "Tap *Select Person* below to choose the person you want to give a receipt to.",
+            sections,
+            "Select Person",
+        )
     
     def handle_statements(self, person, message_text):
         """
@@ -709,7 +754,7 @@ class MessageHandler:
                 "You currently have no lending or borrowing records on the system."
             )
 
-            return self.whatsapp.send_message(
+            return self.whatsapp.send_interactive_buttons(
                 person.phone_number,
                 message
             )
@@ -779,17 +824,12 @@ class MessageHandler:
             )
 
             agreement = contract.agreement_number or "N/A"
-
+            start_date = contract.start_date
+            human_readable_contract_date = start_date.strftime("%d %B %Y") if start_date else "Not set"
             statement_lines.append(
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"*{role}*\n"
-                f"👤 {other_person}\n"
-                f"📄 Agreement: `{agreement}`\n"
-                f"💰 Amount: {currency} {contract.amount:,.2f}\n"
-                # f"💵 Repaid: {currency} {repaid:,.2f}\n"
-                # f"📌 Outstanding: {currency} {outstanding:,.2f}\n"
-                # f"📅 Due: {contract.due_date.strftime('%d %b %Y') if contract.due_date else 'Not specified'}\n"
-                # f"📊 Status: {status}"
+                f"{human_readable_contract_date} {other_person} {currency}{outstanding}\n"
             )
 
         #Header
@@ -814,10 +854,10 @@ class MessageHandler:
                 f"💰 Amount: {person.currency} {float(person.amount_owed):.2f}\n"
             )
 
-        message += (
-            f"📥 Borrowing agreements: {borrowed_count}\n"
-            f"📤 Lending agreements: {lent_count}\n\n"
-        )
+        # message += (
+        #     f"📥 Borrowing agreements: {borrowed_count}\n"
+        #     f"📤 Lending agreements: {lent_count}\n\n"
+        # )
 
         # Individual contracts
         message += "📋 *AGREEMENT DETAILS*\n"
@@ -979,13 +1019,18 @@ class MessageHandler:
         person.set_session_data("pending_contract_to_confirm_id", None)
         person.user_mode = "welcome"
         person.save(update_fields=["user_mode"])
-        self.whatsapp.send_message(
+        buttons =[
+            {'id': 'home', 'title': 'Home'},
+            {'id': 'exit', 'title': 'Exit'},
+        ]
+        self.whatsapp.send_interactive_buttons(
             person.phone_number,
-            f"You have accepted the credit from {contract.lender.full_name}."
+            f"You have accepted the credit from {contract.lender.full_name}. You'll see the balances on your home screen once the credit is activated.",
+            buttons
         )
-        self.show_main_menu(
-            person,
-        )
+        # self.show_main_menu(
+        #     person,
+        # )
 
         if settings.CREDIT_ACCEPTANCE_PAYWALL_ENABLED:
             # Notify the lender to pay; start their payment flow.
@@ -1996,13 +2041,7 @@ class MessageHandler:
         
         elif person.user_status =='verify_borrower_details':
             if "[Image]" in message_text:
-                self.whatsapp.send_message(person.phone_number, "Image received. Please wait while we verify the details.")
-                return True
-            if message_text.lower() in ["1", "yes","1.","confirm"]:
-                
-                message = f"Information saved successfully, please send a picture of {full_name}'s National ID card.\n >You are required to verify that {full_name} is the real owner of the ID they've shown you."
-                self.whatsapp.send_message(person.phone_number, message)
-                
+                self.whatsapp.send_interactive_buttons(person.phone_number, f"Image received. Please wait while {borrower_ob.full_name} verify the details.")
                 borrower_ob.user_mode = 'borrower_confirmation'
                 borrower_ob.is_verified=True
                 borrower_ob.save(update_fields=['user_mode','is_verified'])
@@ -2023,6 +2062,12 @@ class MessageHandler:
                         {'id': 'reject', 'title': 'Reject'},
                         ]
                 self.whatsapp.send_interactive_buttons(to_number=borrower_ob.phone_number,text=subject_details,buttons=buttons,header_text=None,footer_text="Accept to manage your credit and lend with confidence.")
+                return True
+            if message_text.lower() in ["1", "yes","1.","confirm"]:
+                
+                message = f"Information saved successfully, please send a picture of {full_name}'s National ID card.\n >You are required to verify that {full_name} is the real owner of the ID they've shown you."
+                self.whatsapp.send_message(person.phone_number, message)
+                
                 try:
                     from users.services.identity_service import (
                                 fetch_individual,

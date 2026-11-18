@@ -159,6 +159,7 @@ class Person(models.Model):
         ('enter_receipt_amount', 'Enter Receipt Amount'),
         ('enter_receipt_currency', 'Enter Receipt Currency'),
         ('receipting', 'Receipting'),
+        ('receipt_person', 'Receipt Person'),
         ('receipted', 'Receipted'),
         ('receipt_confirmation', 'Receipt Confirmation'),
         ('receipt_confirmed', 'Receipt Confirmed'),

@@ -83,3 +83,20 @@ def has_available_credit_check(checker):
     available_checks = purchased_checks - used_checks
 
     return available_checks > 0
+
+def extract_national_id(message: str) -> str | None:
+    import re
+
+    ZW_ID_PATTERN = re.compile(
+        r"\b(\d{2})\s*[-–]?\s*(\d{6,7})\s*[-–]?\s*([A-Z])\s*[-–]?\s*(\d{2})\b",
+        re.IGNORECASE,
+    )
+    if not message:
+        return None
+
+    match = ZW_ID_PATTERN.search(message)
+
+    if not match:
+        return None
+
+    return re.sub(r"[-–\s]", "", match.group(0)).upper()

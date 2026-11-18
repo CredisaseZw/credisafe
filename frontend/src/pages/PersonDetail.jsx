@@ -185,8 +185,8 @@ const Field = ({ label, value, highlight = false }) => (
       {label}
     </dt>
     <dd className={`mt-1 break-words text-sm ${highlight
-        ? 'font-semibold text-slate-900'
-        : 'font-medium text-slate-700'
+      ? 'font-semibold text-slate-900'
+      : 'font-medium text-slate-700'
       }`}>
       {formatValue(value)}
     </dd>
@@ -270,8 +270,8 @@ const MessageCard = ({ message }) => {
   return (
     <div className={`flex ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div className={`w-full max-w-[88%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[75%] ${outgoing
-          ? 'rounded-br-sm bg-indigo-600 text-white'
-          : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+        ? 'rounded-br-sm bg-indigo-600 text-white'
+        : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
         }`}>
         <div className="mb-2 flex items-center justify-between gap-4">
           <span className={`text-xs font-semibold ${outgoing ? 'text-indigo-100' : 'text-slate-500'
@@ -295,8 +295,8 @@ const MessageCard = ({ message }) => {
             type="button"
             onClick={() => setExpanded(value => !value)}
             className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${outgoing
-                ? 'text-indigo-100 hover:text-white'
-                : 'text-indigo-600 hover:text-indigo-800'
+              ? 'text-indigo-100 hover:text-white'
+              : 'text-indigo-600 hover:text-indigo-800'
               }`}
           >
             {expanded ? 'Show less' : 'Read more'}
@@ -653,6 +653,7 @@ const PersonDetail = () => {
           <dl className="grid grid-cols-1 gap-x-8 gap-y-6 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
             <Field label="Full name" value={person.full_name} />
             <Field label="National ID" value={person.national_id} />
+            <Field label="Date Of Birth" value={person.dob} />
             <Field label="Phone number" value={person.phone_number} />
             <Field label="Address" value={person.address} />
             <Field label="Company" value={person.company?.name || person.company_name} />
