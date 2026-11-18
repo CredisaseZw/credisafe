@@ -626,6 +626,7 @@ class MessageHandler:
             status="active"
         ).order_by("created_at")
         
+        credits = list(credits_given)
         # If the user has replied with a number
 
 
@@ -668,11 +669,6 @@ class MessageHandler:
                 )
                 return
 
-        # Otherwise send the menu
-        receipt_menu = "Please select the credit number to receipt from the list below\n"
-
-        credits = list(credits_given)
-
         if not credits:
             self.whatsapp.send_message(
                 person.phone_number,
@@ -695,12 +691,10 @@ class MessageHandler:
             national_id = str(credit.borrower.national_id).strip()
             balance = f"{credit.currency}{credit.amount}"
 
-            title = f"{name} {national_id} {balance}"
-
             buttons.append({
                 'id': str(i),
-                'title': title,
-                'description': f"{full_name} {national_id} {balance}"
+                'title': name,
+                'description': f"{national_id} {balance}"
             })
 
         buttons.extend([
