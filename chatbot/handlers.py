@@ -1061,7 +1061,7 @@ class MessageHandler:
         message_to_send=(
             f"{contract.borrower.full_name} ({contract.borrower.national_id}) "
             f"has accepted your credit of {contract.currency}{contract.amount}.\n\n"
-            f"To activate the contract, a fee of {currency} {amount} to Yala is required."
+            f"To activate the contract, a fee of {currency} {amount} to YALA is required."
             f"Please select a payment method below or reply 'cancel' to cancel."
         )
         get_whatsapp_payments_options(lender, message_to_send)

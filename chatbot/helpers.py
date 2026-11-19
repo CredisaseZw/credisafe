@@ -8,7 +8,7 @@ def get_whatsapp_payments_options(lender, message_to_send):
                 {'id': 'pay_ECOCASH',  'title': 'EcoCash'},
                 {'id': 'pay_INNBUCKS', 'title': 'InnBucks'},
                 {'id': 'pay_OMARI',    'title': 'Omari'},
-                {'id':'back',   'title':'Back'},
+                {'id':'cancel',   'title':'Cancel'},
                 {'id': 'exit',   'title': 'Exit'},
             ]
     sections =[
