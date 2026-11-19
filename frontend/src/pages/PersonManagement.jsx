@@ -151,7 +151,7 @@ const PersonPopup = ({
 
               <div className="min-w-0">
                 <h2 className="break-words text-lg font-bold text-slate-900 sm:text-xl">
-                  {person.full_name || 'Unnamed individual'}
+                  {person.full_name || 'Unnamed individual'} - {person.gender}
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -976,10 +976,10 @@ const PersonManagement = () => {
                           <div className="flex items-center gap-2">
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${person.gender?.toLowerCase() === 'female'
-                                  ? 'bg-pink-100 text-pink-700'
-                                  : person.gender?.toLowerCase() === 'male'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-slate-100 text-slate-600'
+                                ? 'bg-pink-100 text-pink-700'
+                                : person.gender?.toLowerCase() === 'male'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-slate-100 text-slate-600'
                                 }`}
                             >
                               {person.gender || 'Unknown'}
