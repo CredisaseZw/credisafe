@@ -2366,7 +2366,8 @@ class MessageHandler:
                     {'id': '2', 'title': 'Goods'},
                     {'id': '3', 'title': 'Service'},
                     {'id': '4', 'title': 'Loan'},
-                    {'id': '5', 'title': 'Mukando'}]
+                    # {'id': '5', 'title': 'Mukando'}
+                    ]
                 sections = [{
                             'title': 'Select Credit Type',
                             'rows': buttons
@@ -2388,7 +2389,7 @@ class MessageHandler:
                 return self.show_main_menu(person)
         elif person.user_status =="enter_credit_type":
             message_text = message_text.lower().strip()
-            if not message_text in ['mukando', 'cash', 'goods', 'service', 'loan']:
+            if not message_text in [ 'cash', 'goods', 'service', 'loan']:
                 response = "❌ Invalid credit type. Please click a valid option (e.g. cash, loan):"
                 self.whatsapp.send_message(person.phone_number, response)
                 return False
@@ -2400,8 +2401,8 @@ class MessageHandler:
                 credit_type = 'service'
             elif message_text in ['4','loan']:
                 credit_type = 'loan'
-            elif message_text in ['5','mukando']:
-                credit_type = 'mukando'
+            # elif message_text in ['5','mukando']:
+                # credit_type = 'mukando'
             contract.credit_type = credit_type
             contract.save()
             person.user_status = 'enter_end_date'
