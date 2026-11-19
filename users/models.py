@@ -125,6 +125,7 @@ class Person(models.Model):
         ('otp_setup', 'Awaiting OTP Setup'),
         ('full_name', 'Awaiting Full Name'),
         ('dob', 'Awaiting Date of Birth'),
+        ('gender', 'Awaiting Gender'),
         ('id_image', 'Awaiting ID Image'),
         ('add_address', 'Adding Address'),
         ('edit_address', 'Editing Address'),
@@ -132,11 +133,13 @@ class Person(models.Model):
         ('edit_national_id', 'Editing National ID'),
         ('edit_full_name', 'Editing Full Name'),
         ('edit_dob', 'Editing Date of Birth'),
+        ('edit_gender', 'Editing Gender'),
         ('phone_number', 'Awaiting Phone Number'),
         ('phone_verification', 'Awaiting Phone Verification'),
         ('request_borrower_info', 'Requesting Borrower Payment Information'),
         ('borrower_id', 'Awaiting Borrower National ID'),
         ('borrower_phone', 'Awaiting Borrower Phone Number'),
+        ('borrower_gender', 'Awaiting Borrower Gender'),
         ('give_credit', 'Awaiting Credit Details'),
         ('borrower_full_name', 'Awaiting Borrower Full Name'),
         ('borrower_dob','Borrower Date of Birth'),
@@ -183,8 +186,15 @@ class Person(models.Model):
         ('manual_review', 'Manual Review Required'),
     ]
     
+    GENDERS = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    ]
+    
     user_mode = models.CharField(max_length=50, choices=USER_MODES, default='welcome')
     user_status = models.CharField(max_length=50, choices=USER_STATUSES, default='welcome')
+    gender = models.CharField(max_length=10, null=True, blank=True, choices=GENDERS)
     address = models.CharField(max_length=200, null=True, blank=True)
     # Session tracking
     session_data = models.JSONField(default=dict, blank=True)

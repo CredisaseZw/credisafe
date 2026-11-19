@@ -939,14 +939,22 @@ class MessageHandler:
         elif message_text.lower() in ["2", "2.", "edit","edit details"]:
             person.user_mode = "edit_profile"
             person.save(update_fields=["user_mode"])
-            message =f"What would you like to change?"
+            message =f"What would you like to change? Click '*Select*' to see editing options."
             buttons = [
                 {'id': '1', 'title': "Name"},
                 {'id': '2', 'title': 'National ID'},
-                {'id': '3', 'title': 'Address'},
-                # {'id': 'exit', 'title': 'Exit'},
+                {'id': '3', 'title': 'DOB'},
+                {'id': '4', 'title': 'Gender'},
+                {'id': '5', 'title': 'Address'},
+                {'id': 'exit', 'title': 'Exit'},
             ]
-            return self.whatsapp.send_interactive_buttons(person.phone_number, message, buttons)
+            sections = [
+                {
+                    'title': 'What to edit?',
+                    'rows': buttons
+                }
+            ]
+            return self.whatsapp.send_interactive_list(person.phone_number, message, sections)
         
         elif message_text.lower() in ["3.", "3","reject"]:
             person.verification_status = "rejected"
@@ -1150,7 +1158,7 @@ class MessageHandler:
             # amount  = getattr(service, 'amount', settings.CREDIT_ACCEPTANCE_FEE_AMOUNT)
             # amount = max(contract_amount * 0.02, 1.00)
             amount = max(
-                contract_amount * Decimal("0.02"),
+                contract_amount * Decimal("0.0231"),
                 Decimal("1.00")
             )
             currency = getattr(contract, 'currency', settings.CREDIT_ACCEPTANCE_FEE_CURRENCY)
@@ -1366,6 +1374,9 @@ class MessageHandler:
             )
             return True
         
+        # =========================================================
+        # STEP 4: DOB CHECK
+        # =========================================================
         elif person.user_status =="dob":
             from .helpers import validate_dob
             dob = validate_dob(message_text.strip())
@@ -1379,10 +1390,46 @@ class MessageHandler:
                 return False
 
             person.dob = dob
-            person.user_status = 'add_address'
+            person.user_status = 'gender'
 
             person.save(update_fields=[
                 'dob',
+                'user_status'
+            ])
+            buttons =[
+                {
+                    "id": "male",
+                    "title": "Male"
+                },
+                {
+                    "id": "female",
+                    "title": "Female"
+                },
+                {
+                    "id": "other",
+                    "title": "Other"
+                }
+            ]
+            self.whatsapp.send_interactive_buttons(
+                person.phone_number,
+                "Please select your gender.",
+                buttons
+            )
+            return True
+        
+        elif person.user_status =="gender":
+            if not message_text.strip().lower() in ["male","female","other"]:
+                self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Invalid option selected. Please reply with your gender: 'male', 'female' or 'other'"
+                )
+                return False
+            person.gender = message_text.strip()
+            person.user_status = 'add_address'
+            
+
+            person.save(update_fields=[
+                'gender',
                 'user_status'
             ])
 
@@ -1393,7 +1440,7 @@ class MessageHandler:
             return True
         
         # =========================================================
-        # STEP 4: ADDRESS CHECK
+        # STEP 6: ADDRESS CHECK
         # =========================================================
         elif person.user_status == 'add_address':
             address = message_text.strip()
@@ -1420,6 +1467,7 @@ class MessageHandler:
                 "*Confirm details*\n\n"
                 f"Name: {name}\n"
                 f"Date of Birth: {person.dob.strftime('%d/%m/%Y') if person.dob else 'N/A'}\n"
+                f"Gender: {person.gender}\n"
                 f"ID Number: {national_id}\n"
                 f"Address: {address}\n" 
                 f"Mobile Number: {mobile_number}"
@@ -1476,6 +1524,20 @@ class MessageHandler:
                 person.save(update_fields=['user_status','user_mode'])
                 self.whatsapp.send_interactive_buttons(person.phone_number, "Please add your date of birth in the format DD/MM/YYYY.\n\nFor example:\n30/07/1990")
                 return True
+            elif message_text.lower()=='gender':
+                person.user_status = "edit_gender"
+                person.user_mode = "signup"
+                person.save(update_fields=['user_status','user_mode'])
+                buttons =[
+                    {'id': 'male', 'title': 'Male'},
+                    {'id': 'female', 'title': 'Female'},
+                    {'id': 'other', 'title': 'Other'},
+                ]
+                self.whatsapp.send_interactive_buttons(person.phone_number, "Please select your gender.", buttons)
+                return True
+            else:
+                self.whatsapp.send_interactive_buttons(person.phone_number, "Invalid option. please choose one of the listed options above")
+                return False
         
         elif person.user_status == 'edit_full_name':
             name = message_text.strip().title()
@@ -1557,6 +1619,19 @@ class MessageHandler:
             ]
             self.whatsapp.send_interactive_buttons(person.phone_number, "Date of Birth updated successfully, Confirm if everything else is correct.", buttons)
             return True
+        
+        elif person.user_status =="edit_gender":
+            person.gender = message_text.strip().lower()
+            person.user_status = 'verify_details'
+            person.save(update_fields=['gender','user_status'])
+            buttons =[
+                {'id': '1', 'title': 'Confirm'},
+                {'id': '2', 'title': 'Edit'},
+                {'id': '3', 'title': 'Exit'},
+            ]
+            self.whatsapp.send_interactive_buttons(person.phone_number, "Gender updated successfully, Confirm if everything else is correct.", buttons)
+            return True
+        
         # =========================================================
         # STEP 6: VERIFY DETAILS
         # =========================================================
@@ -1579,6 +1654,16 @@ class MessageHandler:
                     return self.whatsapp.send_message(person.phone_number, f"{prefix}Please enter a 4-digit pin code for future access.")
                         
                 else:
+                    if person.is_verified:
+                        # self.whatsapp.send_message(person.phone_number, "You're now a Credi user.")
+                        self.show_main_menu(person)
+                        if uploader :=person.uploader:
+                            buttons =[
+                                {"id":"1","title":"Give Credit"},
+                                {"id":"2","title":"Exit"}
+                            ]
+                            self.whatsapp.send_interactive_buttons(uploader.phone_number, f"{person.full_name} is now a Credi user, what would you like to do next?")
+                            return True
                     person.user_status='id_image'
                     person.save(update_fields=['user_status'])
                     return self.whatsapp.send_message(person.phone_number, "Got it, now send a picture of your national ID")
@@ -1601,6 +1686,7 @@ class MessageHandler:
                     {'id': '2', 'title': 'ID Number'},
                     {'id': '3', 'title': 'Address'},
                     {'id':'4','title':"DOB"},
+                    {'id':'5','title':"Gender"},
                     {'id': 'back', 'title': 'Back'},
                     {'id': 'exit', 'title': 'Exit'},
                 ]
@@ -1951,7 +2037,7 @@ class MessageHandler:
         if person.user_status == 'borrower_full_name':
             full_name = message_text.strip()
             if not validate_name(full_name):
-                response = "Please type Full Name and Surname eg: John Doe"
+                response = "Please type their Full Name and Surname eg: John Doe"
                 self.whatsapp.send_interactive_buttons(person.phone_number, response)
                 return False
             new_borrower, created = Person.objects.get_or_create(
@@ -1962,12 +2048,48 @@ class MessageHandler:
                     'mentioned_name': full_name,
                 }
             )
-            person.user_status = 'borrower_dob'
-            person.save()
+            person.user_status = 'borrower_gender'
+            person.save(update_fields=['user_status'])
+            buttons =[
+                {
+                    "id": "male",
+                    "title": "Male"
+                },
+                {
+                    "id": "female",
+                    "title": "Female"
+                },
+                {
+                    "id": "other",
+                    "title": "Other"
+                }
+            ]
+            self.whatsapp.send_interactive_buttons(
+                person.phone_number,
+                f"Please select {full_name}'s gender.",
+                buttons
+            )
+            return True
             
-            message =f"Please type date of birth for {full_name} in the format;\n\n30/06/1990"
+        
+        elif person.user_status =='borrower_gender':
+            if not message_text.lower() not in ["male","female","other"]:
+                self.whatsapp.send_interactive_buttons(
+                    person.phone_number,
+                    "Invalid gender selected. Please try again from the given options."
+                )
+                return False
+            
+            if borrower_ob:
+                borrower_ob.gender = message_text.lower()
+                borrower_ob.save(update_fields=['gender'])
+            
+            person.user_status = 'borrower_dob'
+            person.save(update_fields=['user_status'])
+            message = f"Please type {full_name}'s date of birth in DD/MM/YYYY format. e.g. 30/06/1990"
             self.whatsapp.send_interactive_buttons(person.phone_number, message)
             return True
+            
         
         elif person.user_status == 'borrower_dob':
             from .helpers import validate_dob
@@ -2049,9 +2171,10 @@ class MessageHandler:
                 borrower_ob.save(update_fields=['user_mode','is_verified','needs_manual_review'])
 
                 subject_details = (
-                    "Do you accept addition of your details below to Credi as a user?\n\n"
+                    f"Hi {full_name}.\nDo you accept addition of your details below to Credi as a user?\n\n"
                     f"Name: {borrower_ob.full_name}\n"
                     f"Date of Birth: {borrower_ob.dob.strftime('%d/%m/%Y') if borrower_ob.dob else 'N/A'}\n"
+                    f"Gender: {borrower_ob.gender}\n"
                     f"ID Number: {borrower_ob.national_id}\n"
                     f"Address: {borrower_ob.address}\n"
                     f"Mobile Number: {borrower_ob.phone_number}\n\n"
