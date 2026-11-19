@@ -654,6 +654,7 @@ const PersonDetail = () => {
             <Field label="Full name" value={person.full_name} />
             <Field label="National ID" value={person.national_id} />
             <Field label="Date Of Birth" value={person.dob} />
+            <Field label="Gender" value={person.gender} />
             <Field label="Phone number" value={person.phone_number} />
             <Field label="Address" value={person.address} />
             <Field label="Company" value={person.company?.name || person.company_name} />

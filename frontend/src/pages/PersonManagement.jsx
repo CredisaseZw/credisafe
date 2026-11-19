@@ -973,12 +973,25 @@ const PersonManagement = () => {
                       >
                         {/* Name, ID and address */}
                         <td className="max-w-sm px-5 py-4">
-                          <Link
-                            to={`/admin/persons/${person.id}`}
-                            className="font-semibold text-slate-900 transition hover:text-indigo-600"
-                          >
-                            {person.full_name || 'Unnamed individual'}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${person.gender?.toLowerCase() === 'female'
+                                  ? 'bg-pink-100 text-pink-700'
+                                  : person.gender?.toLowerCase() === 'male'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                            >
+                              {person.gender || 'Unknown'}
+                            </span>
+
+                            <Link
+                              to={`/admin/persons/${person.id}`}
+                              className="font-semibold text-slate-900 transition hover:text-indigo-600"
+                            >
+                              {person.full_name || 'Unnamed individual'}
+                            </Link>
+                          </div>
 
                           <p className="mt-1 text-xs font-medium text-slate-500">
                             ID: {person.national_id || 'Not provided'}
