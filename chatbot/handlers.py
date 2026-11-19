@@ -451,8 +451,10 @@ class MessageHandler:
 
         self.whatsapp.send_message(
             person.phone_number,
-            f"A payment prompt of {payment.amount} {payment.currency} to Yala for your Credi Enquiry has been sent to {payment_phone_number}."
-            f"Please check your phone screen for the {last_payment_method} pop-up prompt and enter your PIN to approve."
+            f"A payment request of {payment.amount} {payment.currency} to YALA for your Credi Enquiry has been sent to {payment_phone_number}.\n\n"
+            f"Once payment is complete, you will receive *3 additional free* credit checks, giving you a total of 4 credit checks within one month.\n\n"
+            f"Please check your phone for the {last_payment_method} payment prompt and enter your PIN to approve the transaction.\n\n"
+            f"Please note: The 3 additional free credit checks are valid for one month only. Any unused checks will expire at the end of the month."
         )
         return True
     
@@ -1048,14 +1050,18 @@ class MessageHandler:
         from credit.models import ServiceFee
         from .helpers import get_whatsapp_payments_options
         lender = contract.lender
-        service = ServiceFee.objects.filter(service_type='credit_activation_fee').last()
-        amount   = getattr(service, 'amount') if service else settings.CREDIT_ACCEPTANCE_FEE_AMOUNT
-        currency = getattr(service, 'currency') if service else settings.CREDIT_ACCEPTANCE_FEE_CURRENCY
+        contract_amount = contract.amount
+        currency = contract.currency
+        
+        amount = max(
+                        contract_amount * Decimal("0.0231"),
+                        Decimal("1.00")
+                    )
 
         message_to_send=(
             f"{contract.borrower.full_name} ({contract.borrower.national_id}) "
             f"has accepted your credit of {contract.currency}{contract.amount}.\n\n"
-            f"To activate the contract, a fee of {currency} {amount} to Yala is required. "
+            f"To activate the contract, a fee of {currency} {amount} to Yala is required."
             f"Please select a payment method below or reply 'cancel' to cancel."
         )
         get_whatsapp_payments_options(lender, message_to_send)

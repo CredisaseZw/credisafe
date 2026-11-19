@@ -19,6 +19,7 @@ import {
   RefreshIcon,
   ExclamationCircleIcon,
   UserCircleIcon,
+  CalendarIcon,
 } from '@heroicons/react/outline';
 
 // --------------------------------------------------
@@ -48,6 +49,20 @@ const getVerificationStatus = person => {
 };
 
 const isPersonActive = person => person.is_active !== false;
+
+const formatDate = value => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
 
 const StatusBadge = ({ children, type = 'neutral' }) => {
   const styles = {
@@ -208,7 +223,17 @@ const PersonPopup = ({
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3 sm:col-span-2 lg:col-span-1">
+                <div className="flex items-start gap-3">
+                  <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-400">Date of birth</p>
+                    <p className="text-sm font-medium text-slate-800">
+                      {formatDate(person.dob)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 sm:col-span-2 lg:col-span-3">
                   <LocationMarkerIcon className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
                   <div className="min-w-0">
                     <p className="text-xs text-slate-400">Address</p>
@@ -426,6 +451,10 @@ const PersonManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [manualReviewFilter, setManualReviewFilter] = useState('all');
 
+  // Registration date filters
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [personImages, setPersonImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
@@ -438,6 +467,7 @@ const PersonManagement = () => {
     full_name: '',
     national_id: '',
     phone_number: '',
+    dob: '',
     address: '',
     company_id: '',
   });
@@ -459,6 +489,10 @@ const PersonManagement = () => {
         params.needs_manual_review = 'false';
       }
 
+      // These filter created_at on the backend.
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+
       const [personsRes, companiesRes] = await Promise.all([
         api.get('/persons/', { params }),
         api.get('/companies/'),
@@ -472,7 +506,7 @@ const PersonManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [manualReviewFilter]);
+  }, [manualReviewFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -493,9 +527,7 @@ const PersonManagement = () => {
       setPersonImages(response.data?.images || []);
     } catch (err) {
       console.error('Failed to load person images:', err);
-      setImageError(
-        getError(err, 'Could not load identity images.')
-      );
+      setImageError(getError(err, 'Could not load identity images.'));
     } finally {
       setLoadingImages(false);
     }
@@ -513,38 +545,27 @@ const PersonManagement = () => {
   // Quick actions
   // --------------------------------------------------
 
-  const refreshPersonAfterAction = async personId => {
-    await fetchData();
-
-    if (selectedPerson?.id === personId) {
-      try {
-        const updatedResponse = await api.get(`/persons/${personId}/`);
-        setSelectedPerson(updatedResponse.data);
-      } catch (err) {
-        console.error('Failed to refresh selected individual:', err);
-      }
-    }
-  };
-
   const handleManualApproval = async person => {
     if (!person || busy) return;
 
-    const endpoint = person.is_verified
-      ? 'approve'
-      : 'verify';
+    // Unverified individuals must go through verify.
+    // Already-verified individuals awaiting manual review use approve.
+    const endpoint = person.is_verified ? 'approve' : 'verify';
 
     setBusy(true);
 
     try {
       await api.post(`/persons/${person.id}/${endpoint}/`);
 
-      await refreshPersonAfterAction(person.id);
+      await fetchData();
+
+      if (selectedPerson?.id === person.id) {
+        const updatedResponse = await api.get(`/persons/${person.id}/`);
+        setSelectedPerson(updatedResponse.data);
+      }
     } catch (err) {
       console.error('Failed to approve individual:', err);
-
-      alert(
-        getError(err, 'Could not approve this individual.')
-      );
+      alert(getError(err, 'Could not approve this individual.'));
     } finally {
       setBusy(false);
     }
@@ -553,12 +574,12 @@ const PersonManagement = () => {
   const handlePersonAction = async name => {
     if (!selectedPerson || busy) return;
 
-    const personId = selectedPerson.id;
-
     if (name === 'manual_approve') {
       await handleManualApproval(selectedPerson);
       return;
     }
+
+    const personId = selectedPerson.id;
 
     const confirmationMessages = {
       reject: 'Are you sure you want to reject this individual?',
@@ -578,13 +599,13 @@ const PersonManagement = () => {
     try {
       await api.post(`/persons/${personId}/${name}/`);
 
-      await refreshPersonAfterAction(personId);
+      await fetchData();
+
+      const updatedResponse = await api.get(`/persons/${personId}/`);
+      setSelectedPerson(updatedResponse.data);
     } catch (err) {
       console.error(`Failed to ${name} person:`, err);
-
-      alert(
-        getError(err, `Could not ${name} this individual.`)
-      );
+      alert(getError(err, `Could not ${name} this individual.`));
     } finally {
       setBusy(false);
     }
@@ -599,6 +620,7 @@ const PersonManagement = () => {
       full_name: '',
       national_id: '',
       phone_number: '',
+      dob: '',
       address: '',
       company_id: '',
     });
@@ -617,6 +639,7 @@ const PersonManagement = () => {
       full_name: person.full_name || '',
       national_id: person.national_id || '',
       phone_number: person.phone_number || '',
+      dob: person.dob ? String(person.dob).slice(0, 10) : '',
       address: person.address || '',
       company_id: person.company?.id || person.company_id || '',
     });
@@ -638,6 +661,7 @@ const PersonManagement = () => {
       full_name: formData.full_name,
       national_id: formData.national_id,
       phone_number: formData.phone_number,
+      dob: formData.dob || null,
       address: formData.address,
       company: formData.company_id
         ? parseInt(formData.company_id, 10)
@@ -808,8 +832,8 @@ const PersonManagement = () => {
 
         {/* Search and filters */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row">
-            <div className="relative flex-1">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <div className="relative lg:col-span-2">
               <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
               <input
@@ -837,8 +861,50 @@ const PersonManagement = () => {
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
             >
               <RefreshIcon className="h-4 w-4" />
-              Refresh
+              Apply filters
             </button>
+
+            {/* Registration date filters */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                Registered from
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={event => setDateFrom(event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                Registered to
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={event => setDateTo(event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+
+            <div className="flex items-end lg:col-span-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDateFrom('');
+                  setDateTo('');
+                  setSearchQuery('');
+                  setManualReviewFilter('all');
+                }}
+                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         </div>
 
@@ -881,11 +947,13 @@ const PersonManagement = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px] text-left">
+              <table className="w-full min-w-[1100px] text-left">
                 <thead className="bg-slate-50">
                   <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-5 py-4">Individual</th>
+                    <th className="px-5 py-4">Date of birth</th>
                     <th className="px-5 py-4">Phone</th>
+                    <th className="px-5 py-4">Date registered</th>
                     <th className="px-5 py-4">Account status</th>
                     <th className="px-5 py-4">Verification</th>
                     <th className="px-5 py-4 text-right">Actions</th>
@@ -924,21 +992,37 @@ const PersonManagement = () => {
                           </p>
                         </td>
 
+                        {/* DOB */}
+                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                          {formatDate(person.dob)}
+                        </td>
+
                         {/* Phone */}
-                        <td className="px-5 py-4 text-sm text-slate-600">
+                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
                           {person.phone_number || '—'}
+                        </td>
+
+                        {/* Date registered */}
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <div className="text-sm font-medium text-slate-700">
+                            {formatDate(person.created_at)}
+                          </div>
+                          {person.created_at && (
+                            <p className="mt-1 text-xs text-slate-400">
+                              {new Date(person.created_at).toLocaleTimeString('en-GB', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          )}
                         </td>
 
                         {/* Account status */}
                         <td className="px-5 py-4">
                           {active ? (
-                            <StatusBadge type="success">
-                              Active
-                            </StatusBadge>
+                            <StatusBadge type="success">Active</StatusBadge>
                           ) : (
-                            <StatusBadge type="danger">
-                              Inactive
-                            </StatusBadge>
+                            <StatusBadge type="danger">Inactive</StatusBadge>
                           )}
                         </td>
 
@@ -968,7 +1052,6 @@ const PersonManagement = () => {
                         {/* Actions */}
                         <td className="px-5 py-4">
                           <div className="flex items-center justify-end gap-2">
-                            {/* Manual approval quick action */}
                             {person.needs_manual_review && (
                               <button
                                 type="button"
@@ -1119,6 +1202,23 @@ const PersonManagement = () => {
                   />
                 </div>
 
+                {/* Date of birth */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Date of birth
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.dob}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={event => setFormData({
+                      ...formData,
+                      dob: event.target.value,
+                    })}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  />
+                </div>
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
                     Company
@@ -1129,7 +1229,7 @@ const PersonManagement = () => {
                       ...formData,
                       company_id: event.target.value,
                     })}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
                   >
                     <option value="">No company</option>
                     {companies.map(company => (
