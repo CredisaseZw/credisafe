@@ -1651,7 +1651,8 @@ class MessageHandler:
                     if not person.otp_code:
                         person.user_status = "otp_setup"
                         person.save(update_fields=['user_status'])
-                    return self.whatsapp.send_message(person.phone_number, f"{prefix}Please enter a 4-digit pin code for future access.")
+                        return self.whatsapp.send_message(person.phone_number, f"{prefix}Please enter a 4-digit pin code for future access.")
+                    return self.whatsapp.send_message(person.phone_number, "We received your image, stay tuned for account verification updates.")
                         
                 else:
                     if person.is_verified:
@@ -2928,7 +2929,7 @@ class MessageHandler:
             text=welcome_message,
             buttons=buttons,
             header_text=None,
-            footer_text="type '*help*' for usage instructions"
+            footer_text="type 'help' for usage instructions"
         )
 
         return True
