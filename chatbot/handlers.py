@@ -66,8 +66,9 @@ class MessageHandler:
         if message_text.lower() in ["help", "support", "how it works"]:
             from .helpers import handle_how_it_works
             message = handle_how_it_works()
+            title_one ="Terms and Conditions" if message_text.lower() =='help' else "Continue"
             buttons =[
-                {"id":"1","title":"Terms and conditions"},
+                {"id":"1","title":title_one},
                 {"id":"2","title":"Exit"}
             ]
             return self.whatsapp.send_interactive_buttons(from_number, message)
@@ -1310,6 +1311,9 @@ class MessageHandler:
                     "Once registered, your information will be updated instantly, and you'll be able to give credit or check the credit status of others.\n"
                     "\nIt only takes a moment to get started, reply with your National ID number to continue eg 12345678A09"
                         )
+                # buttons =[
+                #     {}
+                # ]
                 self.whatsapp.send_message(person.phone_number, welcome_message)
                 return False
 
