@@ -1303,7 +1303,14 @@ class MessageHandler:
         if person.user_status == 'national_id':
             nid = normalize_national_id(message_text)
             if not person.national_id and message_text.lower() in ["hi", "hello", "hie","agree and continue","hey"]:
-                self.whatsapp.send_message(person.phone_number, "Welcome to Credi. You are not yet a user. Please enter your ID number to continue.")
+                welcome_message = (
+                    "Welcome to Credi. You are not yet a user. Please enter your ID number to continue.\n\n"
+                    "*Why sign up?*\n"
+                    "Your account allows Credi to securely gather your credit information from different sources, giving you access to your credit history, loans and accounts in one place.\n"
+                    "Once registered, your information will be updated instantly, and you'll be able to give credit or check the credit status of others.\n"
+                    "\n\nIt only takes a moment to get started, enter your National ID number to continue"
+                        )
+                self.whatsapp.send_message(person.phone_number, welcome_message)
                 return False
 
             if not is_valid_zim_national_id(nid):
