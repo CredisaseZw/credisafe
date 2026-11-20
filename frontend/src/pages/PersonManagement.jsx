@@ -861,7 +861,7 @@ const PersonManagement = () => {
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
             >
               <RefreshIcon className="h-4 w-4" />
-              Apply filters
+              Refresh List
             </button>
 
             {/* Registration date filters */}
