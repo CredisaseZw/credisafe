@@ -1308,7 +1308,7 @@ class MessageHandler:
                     "*Why sign up?*\n"
                     "Your account allows Credi to securely gather your credit information from different sources, giving you access to your credit history, loans and accounts in one place.\n"
                     "Once registered, your information will be updated instantly, and you'll be able to give credit or check the credit status of others.\n"
-                    "\n\nIt only takes a moment to get started, enter your National ID number to continue"
+                    "\nIt only takes a moment to get started, reply with your National ID number to continue eg 12345678A09"
                         )
                 self.whatsapp.send_message(person.phone_number, welcome_message)
                 return False
