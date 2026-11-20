@@ -61,23 +61,26 @@ class MessageHandler:
         person, created = Person.objects.get_or_create(
             phone_number=from_number,
             is_active=True,
-            defaults={'user_mode': 'accepting_terms', 'user_status': 'national_id'}
+            defaults={'user_mode': 'signup', 'user_status': 'national_id'}
         )
         if message_text.lower() in ["help", "support", "how it works"]:
             from .helpers import handle_how_it_works
             message = handle_how_it_works()
-            return self.whatsapp.send_message(from_number, message)
-        if created or person.user_mode == 'accepting_terms':
+            buttons =[
+                {"id":"1","title":"Terms and conditions"},
+                {"id":"2","title":"Exit"}
+            ]
+            return self.whatsapp.send_interactive_buttons(from_number, message)
+        
+        if message_text.lower() in ["terms and conditions", 'privacy policy','agree and continue']:
             if message_text.lower() == 'agree and continue':
-                person.user_mode = 'signup'
-                person.user_status = 'national_id'
-                person.save(update_fields=['user_mode', 'user_status'])
-            elif message_text.lower() == 'exit':
+                # person.user_mode = 'signup'
+                # person.user_status = 'national_id'
+                # person.save(update_fields=['user_mode', 'user_status'])
                 self.whatsapp.send_message(
                     from_number,
-                    "You have rejected the Credi terms of service. If you change your mind, you can start again by sending 'Hi'."
+                    "You have accepted terms and conditions of Credi."
                 )
-                return
             else:
                 from .helpers import welcome
                 welcome_message = welcome()
@@ -85,8 +88,8 @@ class MessageHandler:
                     from_number,
                     welcome_message,
                     [
-                        {'id': 'accept_terms', 'title': 'Agree and Continue'},
-                        {'id': 'how_it_works', 'title': 'How It Works'},
+                        # {'id': 'accept_terms', 'title': 'Agree and Continue'},
+                        # {'id': 'how_it_works', 'title': 'How It Works'},
                         {'id': 'reject_terms', 'title': 'Exit'},
                     ]
                 )
