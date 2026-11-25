@@ -2088,7 +2088,7 @@ class MessageHandler:
             
         
         elif person.user_status =='borrower_gender':
-            if not message_text.lower() not in ["male","female","other"]:
+            if message_text.lower() not in ["male","female","other"]:
                 self.whatsapp.send_interactive_buttons(
                     person.phone_number,
                     "Invalid gender selected. Please try again from the given options."
